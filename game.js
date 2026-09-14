@@ -188,6 +188,7 @@
   function notify(text) { $('toast').textContent = text; toastUntil = performance.now() + 2500; }
   function showDialog(content) {
     $('dialog').innerHTML = content;
+    $('dialog').querySelector('h2').id = 'dialog-title';
     $('overlay').hidden = false;
     canvas.tabIndex = -1;
     $('dialog').querySelector('button')?.focus();
@@ -202,7 +203,7 @@
     $('timer').classList.toggle('urgent', time <= 10);
     $('level-number').textContent = String(level + 1).padStart(2, '0');
     $('level-total').textContent = '/ ' + levels.length;
-    $('expedition-summary').textContent = levels.length + ' mines. One golden adventure.';
+    $('expedition-summary').textContent = levels.length + ' stops. One legendary voyage.';
     $('location').textContent = String(level + 1).padStart(2, '0') + ' — ' + levels[level][0].toUpperCase();
     $('dynamite-count').textContent = dynamite;
     $('drop').disabled = phase !== 'playing' || hookState !== 'swing';
@@ -234,10 +235,10 @@
   }
   function renderResult() {
     if (phase === 'lost') {
-      showDialog(`<span class="badge">THE MINE WILL WAIT</span><h2>So close, prospector.</h2><p>You brought in ${money(bank + haul)} of ${money(levels[level][1])}.<br>Try a new angle. Diamonds are light and valuable.</p><button class="primary" id="retry">Retry this mine ↻</button>`);
+      showDialog(`<span class="badge">ANOTHER SHOT AT THE LOOT</span><h2>Chin up, captain!</h2><p>You brought in ${money(bank + haul)} of ${money(levels[level][1])}.<br>Try a new angle. Diamonds are light and valuable.</p><button class="primary" id="retry">Hunt again ↻</button>`);
       $('retry').onclick = startLevel;
     } else {
-      showDialog(`<span class="badge">${levels.length} MINES. ONE LEGEND.</span><h2>A fortune well earned.</h2><p>You conquered all ${levels.length} mines with ${money(bank)} left in your pocket.<br>The Prospector’s Club salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
+      showDialog(`<span class="badge">${levels.length} STOPS. ONE LEGEND.</span><h2>Yo-ho! What a haul!</h2><p>You conquered all ${levels.length} mines with ${money(bank)} left in your pocket.<br>The Jolly Hook crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
       $('restart').onclick = () => { level = 0; bank = 0; dynamite = 0; strength = false; book = false; startLevel(); };
     }
   }
@@ -252,7 +253,7 @@
   }
   function renderShop() {
     const prices = supplyPrices(level + 1);
-    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY POST</span><h2>A little help down below.</h2><p>Goal paid. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Goal ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">🧨</span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">⚡</span><strong>Strength drink</strong><small>2× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">📘</span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
+    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · PIRATE TRADING POST</span><h2>Stock up, shipmate.</h2><p>Goal paid. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Goal ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">🧨</span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">⚡</span><strong>Strength drink</strong><small>2× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">📘</span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
     $('buy-dynamite').onclick = () => buy('dynamite');
     $('buy-strength').onclick = () => buy('strength');
     $('buy-book').onclick = () => buy('book');
@@ -315,7 +316,7 @@
     updateHUD(); saveProgress();
   }
   function renderPause() {
-    showDialog('<span class="badge">TAKE A BREATHER</span><h2>Your fortune can wait.</h2><p>The clock is stopped. Your mine is right where you left it.</p><button class="primary" id="resume">Back to digging →</button>');
+    showDialog('<span class="badge">TAKE A BREATHER</span><h2>At ease, captain.</h2><p>Your loot is safe and the clock is stopped. Ready when you are.</p><button class="primary" id="resume">Back to the hunt →</button>');
     $('resume').onclick = pause;
   }
   function update(dt, now) {
@@ -443,21 +444,28 @@
   const background = document.createElement('canvas'); background.width = W; background.height = H;
   function paintBackground() {
     const c = background.getContext('2d');
-    c.fillStyle='#d9dcad';c.fillRect(0,0,W,150);
-    c.fillStyle='#ece4b5';c.beginPath();c.arc(866,37,42,0,Math.PI*2);c.fill();
+    c.fillStyle='#91d6da';c.fillRect(0,0,W,150);
+    c.fillStyle='#fff0bb';c.beginPath();c.arc(866,37,32,0,Math.PI*2);c.fill();
     function hills(points,color){c.beginPath();c.moveTo(0,150);points.forEach(p=>c.lineTo(...p));c.lineTo(W,150);c.fillStyle=color;c.fill();}
-    hills([[0,74],[77,54],[168,83],[285,35],[384,81],[475,59],[576,82],[695,32],[790,77],[926,54],[1100,86]],'#a9b68a');
-    hills([[0,110],[100,81],[231,113],[343,84],[491,121],[680,92],[820,116],[966,77],[1100,106]],'#879b6d');
+    c.fillStyle='#46a9b7';c.fillRect(0,87,W,63);
+    hills([[0,117],[75,85],[130,105],[180,120],[800,122],[950,74],[1020,98],[1100,115]],'#388c86');
+    c.strokeStyle='#b7ebe2';c.lineWidth=2;
+    for(let x=15;x<W;x+=95){c.beginPath();c.moveTo(x,116);c.quadraticCurveTo(x+18,111,x+37,116);c.stroke();}
     for(const [x,y,s] of [[62,76,1],[99,83,.8],[974,64,1.3],[1026,85,.9],[210,94,.7]]){
-      c.fillStyle='#5a7450';c.fillRect(x-2,y+15,4,49*s);for(let j=0;j<3;j++){c.beginPath();c.moveTo(x,y+j*13);c.lineTo(x-16*s,y+27*s+j*13);c.lineTo(x+16*s,y+27*s+j*13);c.fill();}
+      c.strokeStyle='#96704b';c.lineWidth=7*s;c.beginPath();c.moveTo(x+9,y+55*s);c.quadraticCurveTo(x-4,y+24*s,x,y+9);c.stroke();
+      c.fillStyle='#28796c';
+      for(const direction of [-1,1])for(let j=0;j<3;j++){c.beginPath();c.moveTo(x,y+9);c.quadraticCurveTo(x+direction*23*s,y-17+j*13,x+direction*(35-j*5)*s,y+14+j*8);c.quadraticCurveTo(x+direction*13*s,y+5+j*5,x,y+9);c.fill();}
     }
-    c.fillStyle='#657d49';c.fillRect(0,134,W,14);c.fillStyle='#b19657';c.fillRect(0,148,W,9);
-    c.fillStyle='#433326';c.fillRect(0,157,W,H);
-    hills([[0,166],[130,178],[265,163],[430,185],[600,167],[770,183],[990,164],[1100,174]],'#887044');
-    c.fillStyle='#433326';c.fillRect(0,188,W,H);
-    for(let i=0;i<4;i++){c.beginPath();c.moveTo(0,230+i*98);for(let x=0;x<=W;x+=50)c.lineTo(x,230+i*98+Math.sin(x*.013+i*3)*12);c.lineTo(W,H);c.lineTo(0,H);c.fillStyle=['#3e3026','#392d25','#352a24','#302821'][i];c.fill();}
+    c.fillStyle='#f2d598';c.fillRect(0,134,W,14);c.fillStyle='#cba86b';c.fillRect(0,148,W,9);
+    c.fillStyle='#27565d';c.fillRect(0,157,W,H);
+    hills([[0,166],[130,178],[265,163],[430,185],[600,167],[770,183],[990,164],[1100,174]],'#568080');
+    c.fillStyle='#27565d';c.fillRect(0,188,W,H);
+    for(let i=0;i<4;i++){c.beginPath();c.moveTo(0,230+i*98);for(let x=0;x<=W;x+=50)c.lineTo(x,230+i*98+Math.sin(x*.013+i*3)*12);c.lineTo(W,H);c.lineTo(0,H);c.fillStyle=['#244f58','#204953','#1d424e','#193b47'][i];c.fill();}
     const rand=random(41);for(let i=0;i<500;i++){const x=rand()*W,y=170+rand()*410;c.fillStyle=rand()>.5?'#a08a5426':'#181d1838';c.fillRect(x,y,1+rand()*4,1+rand()*2);}
-    for(let x=0;x<W;x+=13){c.strokeStyle='#61773d';c.beginPath();c.moveTo(x,146);c.lineTo(x-3,137-rand()*9);c.stroke();}
+    // A small pennant marks the captain’s beach camp.
+    c.fillStyle='#765334';c.fillRect(704,49,4,89);
+    c.fillStyle='#c95145';c.beginPath();c.moveTo(708,49);c.lineTo(756,59);c.lineTo(708,75);c.fill();
+    c.fillStyle='#fff0d3';c.font='bold 17px Georgia';c.fillText('×',719,66);
     // Timber supports and a little supply crate on the ridge.
     c.fillStyle='#7c613d';c.fillRect(382,110,43,29);c.strokeStyle='#b0945a';c.lineWidth=3;c.strokeRect(382,110,43,29);c.beginPath();c.moveTo(383,111);c.lineTo(424,138);c.stroke();
   }
@@ -465,16 +473,18 @@
     line([[493,132],[507,95],[590,95],[608,132]], '#5a4931', 8);
     line([[502,130],[601,130]], '#ad8649', 6);
     ellipse(551,128,29,7,'#29302044');
-    // Boots, overalls, shirt, beard, and the very important hard hat.
+    // The captain keeps the same winch and hook position as the original miner.
     line([[540,97],[534,121],[522,123]],'#394b48',10);line([[563,97],[572,120],[583,121]],'#394b48',10);
-    polygon([[532,65],[560,62],[573,93],[563,106],[535,103],[525,91]],'#a9663e');
+    polygon([[532,65],[560,62],[573,93],[563,106],[535,103],[525,91]],'#c95145');
     polygon([[537,79],[562,78],[565,104],[536,104]],'#52665b');
     line([[531,70],[516,83],[537,90]],'#ddb186',9);line([[563,69],[580,84],[567,92]],'#ddb186',9);
     ellipse(548,53,19,21,'#d5a780');
     polygon([[530,53],[540,60],[558,60],[565,52],[561,73],[548,80],[534,69]],'#e8e1c8');
     ellipse(544,54,3,4,'#584631');ellipse(558,54,3,4,'#584631');ellipse(552,60,5,4,'#d79d73');
-    ctx.fillStyle='#dfaf49';ctx.beginPath();ctx.arc(548,40,23,Math.PI,0);ctx.fill();
-    line([[522,41],[575,41]],'#edc865',7);ellipse(550,31,7,8,'#6a6947');ellipse(550,31,4,5,'#fff0b9');
+    line([[532,48],[562,56]],'#263c43',2);ellipse(558,54,5,5,'#263c43');
+    polygon([[518,40],[526,20],[538,26],[550,15],[564,26],[575,20],[580,40]],'#243c48','#efc571');
+    line([[520,42],[578,42]],'#efc571',4);
+    ellipse(549,30,4,4,'#fff0d3');line([[544,36],[554,36]],'#fff0d3',2);
     ellipse(550,108,17,17,'#534a35');ellipse(550,108,11,11,'#b59a5f');ellipse(550,108,5,5,'#514b35');
     line([[550,108],[568,108],[568,99]],'#534a35',4);
   }
@@ -528,10 +538,10 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){if(phase==='playing')pause();else saveProgress();}});
   window.addEventListener('pagehide',()=>{if(phase==='playing')pause();else saveProgress();});
   paintBackground();objects=makeMap(0);updateHUD();
-  showDialog('<span class="badge">PROSPECTOR’S JOURNAL</span><h2>Loading your expedition…</h2>');
+  showDialog('<span class="badge">CAPTAIN’S LOG</span><h2>Loading your expedition…</h2>');
   loadProgress().then(restored => {
     if (restored) return;
-    showDialog('<span class="badge">WELCOME TO SUNSET CREEK</span><h2>There’s gold in these hills.</h2><p>One swinging hook. Sixty seconds. A pocketful of possibility.<br>Bring in the goal to unlock the next of ' + levels.length + ' mines.</p><div class="instructions"><span>↓ / Space to drop</span><span>D for dynamite</span><span>Tap to play</span></div><button class="primary" id="start">Let’s strike gold →</button>');
+    showDialog('<span class="badge">ALL ABOARD THE JOLLY HOOK</span><h2>Treasure awaits, captain!</h2><p>One swinging hook. Sixty seconds. A sea of buried loot.<br>Reach the treasure goal to continue your voyage through ' + levels.length + ' mines.</p><div class="instructions"><span>↓ / Space to drop</span><span>D for dynamite</span><span>Tap to play</span></div><button class="primary" id="start">Let’s find treasure →</button>');
     $('start').onclick=startLevel;
   });
   requestAnimationFrame(frame);

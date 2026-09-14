@@ -161,6 +161,8 @@ Existing treasure layouts and object IDs remain unchanged for saved-game compati
 
 Completed checks:
 
+- Pirate UI refresh: `node --check game.js` and `git diff --check` passed. Headless Chromium checks passed for welcome/start, keyboard drop, mobile tap, pause/resume, saved reload/resume, dialog focus containment, and no horizontal overflow at 320px and 390px. Desktop and mobile screenshots reviewed. Ocean scenery, palm trees, pirate captain, parchment dialogs, and treasure/hazard guidance replace the prospector presentation; maps, economy, and save format are unchanged. Audio, actual-device touch, fullscreen, and all shop/result visual states still need manual review.
+
 - Economy: `node --check game.js` and `git diff --check` passed. A temporary Node VM comparison verified all 100 deterministic treasure budgets, value roles, integer rewards, diamond-pig payouts, monotonic shop prices, actual purchase deductions, invalid/duplicate/unaffordable purchase rejection, pack limits, revised book scoring, and legacy save acceptance. All 100 layouts, IDs, radii, weights, and movement speeds matched the pre-balance version.
 - A simple ray-aiming bot starting each mine with zero bank and no upgrades won 90/100 before and after tuning; all first 20 mines passed after tuning. Remaining failures were mines 23, 25, 35, 57, 75, 79, 82, 84, 85, and 88. This smoke simulation is not a human difficulty benchmark or proof of universal winnability; those layouts need focused playtesting.
 
