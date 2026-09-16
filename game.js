@@ -3,58 +3,61 @@
   const $ = id => document.getElementById(id);
   const canvas = $('mine'), ctx = canvas.getContext('2d');
   const W = 1100, H = 580, origin = { x: 550, y: 132 };
+  let objectAspect = 1;
+  new ResizeObserver(([entry]) => { const { width, height } = entry.contentRect; objectAspect = matchMedia('(max-aspect-ratio: 3/4)').matches ? Math.min(1, width * H / (height * W)) : 1; CavernArt.paintLight(cone, { x: LAMP.x, y: origin.y + (LAMP.y - origin.y) * objectAspect }); }).observe(canvas);
   const levels = [
-    ['Sunset Creek', 650, 0], ['Copper Hollow', 1000, 1], ['Old Pine Quarry', 1400, 2],
-    ['Emerald Basin', 1800, 3], ['Dusty Ridge', 2200, 4], ['Moonstone Cavern', 2600, 5],
-    ['Diamond Gulch', 3000, 6], ['Lost Prospector', 3400, 7], ['Kings beneath the Hill', 3900, 8],
-    ['The Golden Heart', 4500, 9], ['Amber Crossing', 5000, 10], ['Silverroot Tunnel', 5500, 11],
-    ['Jade Falls', 6000, 12], ['Crimson Chasm', 6500, 13], ['Sapphire Springs', 7000, 14],
-    ['Obsidian Reach', 7500, 15], ['Opal Observatory', 8000, 16], ['Thunderstone Pit', 8500, 17],
-    ['Frostbite Vein', 9000, 18], ['The Sunken Treasury', 9500, 19], ['Dragonbone Depths', 10000, 20],
-    ['Starlight Shaft', 10500, 21], ['Royal Amethyst', 11000, 22], ['Emberfall Mine', 11500, 23],
-    ['Crystal Labyrinth', 12000, 24], ['The Forgotten Vault', 12500, 25], ['Phoenix Hollow', 13000, 26],
-    ['Celestial Quarry', 13500, 27], ['Midas Descent', 14000, 28], ['The Eternal Fortune', 14500, 29],
-    ['Aurora Passage', 15000, 30], ['Garnet Gorge', 15500, 31], ['The Brass Citadel', 16000, 32],
-    ['Silversong Cavern', 16500, 33], ['Ruby Eclipse', 17000, 34], ['Titanstone Tunnel', 17500, 35],
-    ['The Hidden Dynasty', 18000, 36], ['Prismatic Depths', 18500, 37], ['Cinder Crown', 19000, 38],
-    ['The Platinum Gate', 19500, 39], ['Astral Rift', 20000, 40], ['Black Pearl Basin', 20500, 41],
-    ['The Gilded Abyss', 21000, 42], ['Diamond Tempest', 21500, 43], ['Sovereign Shaft', 22000, 44],
-    ['The Ancient Hoard', 22500, 45], ['Infinity Vein', 23000, 46], ['Dawnfire Vault', 23500, 47],
-    ['The Last Bonanza', 24000, 48], ['Crown of the Earth', 24500, 49],
-    ['Beyond the Crown', 25000, 50], ['Topaz Terrace', 25500, 51], ['Whispering Granite', 26000, 52],
-    ['The Jade Stairway', 26500, 53], ['Mercury Hollow', 27000, 54], ['Scarlet Geode', 27500, 55],
-    ['The Buried Beacon', 28000, 56], ['Lapis Landing', 28500, 57], ['Stormglass Cavern', 29000, 58],
-    ['The Sapphire Throne', 29500, 59], ['Quartz Frontier', 30000, 60], ['Verdant Fault', 30500, 61],
-    ['The Bronze Cathedral', 31000, 62], ['Moonfire Basin', 31500, 63], ['Tourmaline Trail', 32000, 64],
-    ['The Silent Foundry', 32500, 65], ['Sunstone Summit', 33000, 66], ['Echoing Onyx', 33500, 67],
-    ['The Hidden Horizon', 34000, 68], ['Treasury of Tides', 34500, 69], ['Peridot Passage', 35000, 70],
-    ['The Copper Constellation', 35500, 71], ['Fallen Star Quarry', 36000, 72], ['Rosegold Ravine', 36500, 73],
-    ['The Marble Monolith', 37000, 74], ['Twilight Agate', 37500, 75], ['The Hollow Mountain', 38000, 76],
-    ['Golden Mirage', 38500, 77], ['The Velvet Vein', 39000, 78], ['Citadel of Crystals', 39500, 79],
-    ['The Deepward Road', 40000, 80], ['Cobalt Cathedral', 40500, 81], ['The Emerald Engine', 41000, 82],
-    ['Radiant Ruins', 41500, 83], ['The Diamond Delta', 42000, 84], ['Fireopal Fortress', 42500, 85],
-    ['The Argent Archive', 43000, 86], ['Midnight Malachite', 43500, 87], ['The Splintered Sun', 44000, 88],
-    ['Palace of Pyrite', 44500, 89], ['The Worldroot Well', 45000, 90], ['Heavenstone Hollow', 45500, 91],
-    ['The Ruby Reliquary', 46000, 92], ['Everglow Excavation', 46500, 93], ['The Sovereign Seam', 47000, 94],
-    ['Stardust Sanctuary', 47500, 95], ['The Boundless Bonanza', 48000, 96], ['Fortune’s Final Frontier', 48500, 97],
-    ['The Hundredth Door', 49000, 98], ['Heart of a Hundred Mines', 49500, 99]
+    ['Sunset Creek', 600, 0], ['Copper Hollow', 675, 1], ['Old Pine Quarry', 750, 2],
+    ['Emerald Basin', 850, 3], ['Dusty Ridge', 950, 4], ['Moonstone Cavern', 1050, 5],
+    ['Diamond Gulch', 1150, 6], ['Lost Prospector', 1250, 7], ['Kings beneath the Hill', 1350, 8],
+    ['The Golden Heart', 1450, 9], ['Amber Crossing', 1550, 10], ['Silverroot Tunnel', 1650, 11],
+    ['Jade Falls', 1775, 12], ['Crimson Chasm', 1900, 13], ['Sapphire Springs', 2025, 14],
+    ['Obsidian Reach', 2150, 15], ['Opal Observatory', 2275, 16], ['Thunderstone Pit', 2400, 17],
+    ['Frostbite Vein', 2525, 18], ['The Sunken Treasury', 2650, 19], ['Dragonbone Depths', 2775, 20],
+    ['Starlight Shaft', 2900, 21], ['Royal Amethyst', 3025, 22], ['Emberfall Mine', 3150, 23],
+    ['Crystal Labyrinth', 3275, 24], ['The Forgotten Vault', 3400, 25], ['Phoenix Hollow', 3525, 26],
+    ['Celestial Quarry', 3650, 27], ['Midas Descent', 3775, 28], ['The Eternal Fortune', 3900, 29],
+    ['Aurora Passage', 4050, 30], ['Garnet Gorge', 4200, 31], ['The Brass Citadel', 4350, 32],
+    ['Silversong Cavern', 4500, 33], ['Ruby Eclipse', 4650, 34], ['Titanstone Tunnel', 4800, 35],
+    ['The Hidden Dynasty', 4950, 36], ['Prismatic Depths', 5100, 37], ['Cinder Crown', 5250, 38],
+    ['The Platinum Gate', 5400, 39], ['Astral Rift', 5550, 40], ['Black Pearl Basin', 5700, 41],
+    ['The Gilded Abyss', 5850, 42], ['Diamond Tempest', 6000, 43], ['Sovereign Shaft', 6150, 44],
+    ['The Ancient Hoard', 6300, 45], ['Infinity Vein', 6450, 46], ['Dawnfire Vault', 6600, 47],
+    ['The Last Bonanza', 6750, 48], ['Crown of the Earth', 6900, 49],
+    ['Beyond the Crown', 7050, 50], ['Topaz Terrace', 7200, 51], ['Whispering Granite', 7350, 52],
+    ['The Jade Stairway', 7500, 53], ['Mercury Hollow', 7650, 54], ['Scarlet Geode', 7800, 55],
+    ['The Buried Beacon', 7950, 56], ['Lapis Landing', 8100, 57], ['Stormglass Cavern', 8250, 58],
+    ['The Sapphire Throne', 8400, 59], ['Quartz Frontier', 8550, 60], ['Verdant Fault', 8700, 61],
+    ['The Bronze Cathedral', 8850, 62], ['Moonfire Basin', 9000, 63], ['Tourmaline Trail', 9150, 64],
+    ['The Silent Foundry', 9300, 65], ['Sunstone Summit', 9450, 66], ['Echoing Onyx', 9600, 67],
+    ['The Hidden Horizon', 9750, 68], ['Treasury of Tides', 9900, 69], ['Peridot Passage', 10050, 70],
+    ['The Copper Constellation', 10200, 71], ['Fallen Star Quarry', 10350, 72], ['Rosegold Ravine', 10500, 73],
+    ['The Marble Monolith', 10650, 74], ['Twilight Agate', 10800, 75], ['The Hollow Mountain', 10950, 76],
+    ['Golden Mirage', 11100, 77], ['The Velvet Vein', 11250, 78], ['Citadel of Crystals', 11400, 79],
+    ['The Deepward Road', 11550, 80], ['Cobalt Cathedral', 11700, 81], ['The Emerald Engine', 11850, 82],
+    ['Radiant Ruins', 12000, 83], ['The Diamond Delta', 12150, 84], ['Fireopal Fortress', 12300, 85],
+    ['The Argent Archive', 12450, 86], ['Midnight Malachite', 12600, 87], ['The Splintered Sun', 12750, 88],
+    ['Palace of Pyrite', 12900, 89], ['The Worldroot Well', 13050, 90], ['Heavenstone Hollow', 13200, 91],
+    ['The Ruby Reliquary', 13350, 92], ['Everglow Excavation', 13500, 93], ['The Sovereign Seam', 13650, 94],
+    ['Stardust Sanctuary', 13800, 95], ['The Boundless Bonanza', 13950, 96], ['Fortune’s Final Frontier', 14100, 97],
+    ['The Hundredth Door', 14250, 98], ['Heart of a Hundred Mines', 14400, 99]
   ];
   const types = {
-    small: { radius: 17, value: 140, weight: 1.3, color: '#eabc52' },
-    gold: { radius: 29, value: 350, weight: 2.4, color: '#edbc50' },
-    large: { radius: 43, value: 800, weight: 4, color: '#f2c45e' },
-    rock: { radius: 34, value: 15, weight: 6, color: '#6e7166' },
-    diamond: { radius: 16, value: 700, weight: .7, color: '#b3efeb' },
-    gem: { radius: 19, value: 300, weight: .9, color: '#95bdaa' },
+    small: { radius: 17, value: 175, weight: 1, color: '#eabc52' },
+    gold: { radius: 29, value: 450, weight: 2, color: '#edbc50' },
+    large: { radius: 43, value: 950, weight: 3.6, color: '#f2c45e' },
+    rock: { radius: 34, value: 15, weight: 5.5, color: '#6e7166' },
+    diamond: { radius: 16, value: 650, weight: .8, color: '#b3efeb' },
+    gem: { radius: 19, value: 325, weight: .9, color: '#95bdaa' },
     bag: { radius: 22, value: 0, weight: 1, color: '#c8a071' },
     tnt: { radius: 25, value: 0, weight: 1, color: '#ba4938' },
-    pig: { radius: 26, value: 10, weight: .7, speed: 65, color: '#e6a08c' },
-    diamondPig: { radius: 32, value: 710, weight: .7, speed: 110, color: '#d98d83' }
+    pig: { radius: 26, value: 10, weight: .7, speed: 65, color: '#a0846a' },
+    diamondPig: { radius: 32, value: 660, weight: .8, speed: 150, color: '#9d7968' }
   };
   const blastRadius = 120, diamondBonus = 1.5, dynamiteCapacity = 3;
   let level = 0, bank = 0, haul = 0, time = 60, phase = 'ready', objects = [];
   let angle = 0, swing = 0, length = 23, hookState = 'swing', caught = null;
   let dynamite = 0, strength = false, book = false, sound = false, audio;
+  let magnet = false, magnetArmed = false, revealUntil = 0, reelSpeed = 0;
   let lastFrame = 0, deadline = 0, toastUntil = 0, particles = [], popups = [], shakeMag = 0, shakeTime = 0;
   const money = n => '$' + n.toLocaleString('en-US');
   let db, saveQueue = Promise.resolve(), lastSave = 0;
@@ -69,7 +72,7 @@
       time: phase === 'playing' ? Math.max(0, (deadline - performance.now()) / 1000) : time,
       phase: phase === 'playing' ? 'paused' : phase,
       angle, swing, length, hookState, caughtId: caught?.id ?? null,
-      taken: objects.filter(o => o.taken).map(o => o.id), dynamite, strength, book, sound
+      taken: objects.filter(o => o.taken).map(o => o.id), dynamite, strength, book, sound, magnet, magnetArmed
     };
     // Serialize writes so an older autosave cannot overwrite a purchase or restart.
     saveQueue = saveQueue.then(() => db.saves.put(snapshot)).catch(storageError);
@@ -84,6 +87,7 @@
       && (s.phase !== 'won' || s.level === levels.length - 1 || [9, 29, 49].includes(s.level))
       && ['bank', 'haul', 'dynamite'].every(k => Number.isSafeInteger(s[k]) && s[k] >= 0)
       && ['strength', 'book', 'sound'].every(k => typeof s[k] === 'boolean')
+      && ['magnet', 'magnetArmed'].every(k => s[k] === undefined || typeof s[k] === 'boolean')
       && Number.isFinite(s.time) && s.time >= 0 && s.time <= 60
       && Number.isFinite(s.angle) && Math.abs(s.angle) <= 1.16
       && Number.isFinite(s.swing) && Number.isFinite(s.length) && s.length >= 23 && s.length <= 1200
@@ -99,6 +103,7 @@
       if (!s) return false;
       if (!validSave(s)) throw new Error('Invalid or unsupported save data');
       ({ level, bank, haul, time, angle, swing, length, hookState, dynamite, strength, book, sound } = s);
+      magnet = s.magnet ?? false; magnetArmed = s.magnetArmed ?? false;
       objects = makeMap(level);
       movePigs();
       objects.forEach(o => { o.taken = s.taken.includes(o.id); });
@@ -137,17 +142,22 @@
       }
       placed.push(obj); return placed;
     }, []);
-    // Require 24% of stationary treasure in the tutorial, rising to 52% by mine 20.
-    // Pigs are optional upside; goals never depend on catching a moving diamond.
-    const targetShare = .24 + .28 * Math.min(index / 19, 1);
+    // Require 26%, 36%, 46%, then 52% of stationary treasure at mines 1, 15, 50, 100.
+    // Pigs remain optional upside; the budget leaves room for missed catches and upgrades.
+    const targetShare = .26 + .10 * Math.min(index / 14, 1)
+      + .10 * Math.max(0, Math.min((index - 14) / 35, 1))
+      + .06 * Math.max(0, Math.min((index - 49) / 50, 1));
     const treasure = map.filter(obj => obj.type !== 'rock');
     const richness = levels[index][1] / (targetShare * treasure.reduce((sum, obj) => sum + obj.value, 0));
     treasure.forEach(obj => { obj.value = Math.round(obj.value * richness); });
     // Append hazards after placing treasure so existing saves retain their object IDs and positions.
     const count = Math.min(6, 1 + Math.floor(index / 4));
     const hazards = Array(count).fill('tnt');
-    hazards.push(...Array(Math.min(3, 1 + Math.floor(index / 5))).fill('pig'));
-    if (index >= 9) hazards.push(...Array(index >= 19 ? 2 : 1).fill('diamondPig'));
+    // Patrol counts are rolled per level, so no two mines load the same guard detail.
+    const pigTier = Math.min(3, 1 + Math.floor(index / 5));
+    hazards.push(...Array(Math.floor(rand() * (pigTier + 1))).fill('pig'));
+    const diamondTier = index < 9 ? 0 : index >= 19 ? 2 : 1;
+    hazards.push(...Array(Math.floor(rand() * (diamondTier + 1))).fill('diamondPig'));
     for (const type of hazards) {
       const obj = { type, id: map.length, ...types[type], taken: false, rotation: rand() * .6 - .3 };
       if (type === 'diamondPig') obj.value = 10 + Math.round(types.diamond.value * richness);
@@ -244,8 +254,11 @@
     $('dynamite-count').textContent = dynamite;
     $('strength-count').textContent = strength ? 1 : 0;
     $('book-count').textContent = book ? 1 : 0;
-    $('strength-item').disabled = !strength;
-    $('book-item').disabled = !book;
+    $('strength-item').disabled = phase !== 'playing' || !strength;
+    $('book-item').disabled = phase !== 'playing' || !book;
+    $('magnet-count').textContent = magnet ? 1 : 0;
+    $('magnet-item').disabled = phase !== 'playing' || !magnet || hookState !== 'swing';
+    $('magnet-item').classList.toggle('armed', magnetArmed);
     $('dynamite').disabled = phase !== 'playing' || !caught || dynamite === 0;
     $('pause').disabled = !['playing', 'paused'].includes(phase);
   }
@@ -267,6 +280,7 @@
     objects = makeMap(level); haul = 0; time = 60; swing = -.8; angle = 0; shakeMag = 0; shakeTime = 0;
     paintBackground(level);
     length = 23; caught = null; hookState = 'swing'; particles = []; popups = [];
+    magnetArmed = false; revealUntil = 0; reelSpeed = 0;
     phase = 'playing'; deadline = performance.now() + 60000;
     hideDialog(); updateHUD(); saveProgress();
   }
@@ -293,7 +307,7 @@
       $('retry').onclick = startLevel;
     } else {
       showDialog(`<span class="badge">${levels.length} SHAFTS. ONE LEGEND.</span><h2>What a haul!</h2><p>You worked all ${levels.length} mines and still carry ${money(bank)}.<br>The whole crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
-      $('restart').onclick = () => { level = 0; bank = 0; dynamite = 0; strength = false; book = false; startLevel(); };
+      $('restart').onclick = () => { level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
     }
   }
   function supplyPrices(index) {
@@ -302,12 +316,15 @@
     return {
       dynamite: Math.max(100, Math.ceil(goal * .035 / 25) * 25),
       strength: Math.max(200, Math.ceil(goal * .12 / 25) * 25),
-      book: Math.max(300, Math.ceil(goal * .18 / 25) * 25)
+      book: Math.max(300, Math.ceil(goal * .18 / 25) * 25),
+      magnet: Math.max(150, Math.ceil(goal * .07 / 25) * 25)
     };
   }
   function renderShop() {
     const prices = supplyPrices(level + 1);
-    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p>Target met. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Target ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">🧨</span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">⚡</span><strong>Strength drink</strong><small>2× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon" aria-hidden="true">📘</span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
+    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p>Target met. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Target ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon icon-dynamite" aria-hidden="true"></span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon icon-potion" aria-hidden="true"></span><strong>Strength drink</strong><small>2× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon icon-book" aria-hidden="true"></span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
+    $('dialog').querySelector('.shop-items').insertAdjacentHTML('beforeend', `<button class="shop-item" id="buy-magnet" ${bank < prices.magnet || magnet ? 'disabled' : ''}><span class="item-icon icon-magnet" aria-hidden="true"></span><strong>Magnetic claw</strong><small>Wider gold capture<br>One launch · arm in the field</small><span>${magnet ? 'Packed ✓' : money(prices.magnet)}</span></button>`);
+    $('buy-magnet').onclick = () => buy('magnet');
     $('buy-dynamite').onclick = () => buy('dynamite');
     $('buy-strength').onclick = () => buy('strength');
     $('buy-book').onclick = () => buy('book');
@@ -318,17 +335,20 @@
     const prices = supplyPrices(level + 1);
     if (!Object.hasOwn(prices, item) || bank < prices[item]
       || (item === 'dynamite' && dynamite >= dynamiteCapacity)
-      || (item === 'strength' && strength) || (item === 'book' && book)) return;
+      || (item === 'strength' && strength) || (item === 'book' && book) || (item === 'magnet' && magnet)) return;
     bank -= prices[item];
     if (item === 'dynamite') dynamite++;
     if (item === 'strength') strength = true;
     if (item === 'book') book = true;
+    if (item === 'magnet') magnet = true;
     tone(540); renderShop(); updateHUD(); saveProgress();
   }
   function drop() {
     if (phase !== 'playing' || hookState !== 'swing') return;
     if (performance.now() >= deadline) { finishLevel(); return; }
-    hookState = 'out'; tone(230, .08); updateHUD();
+    hookState = 'out'; reelSpeed = 0;
+    if (magnetArmed) magnet = false;
+    tone(230, .08); updateHUD(); saveProgress();
   }
   const hookPosition = () => ({ x: origin.x + Math.sin(angle) * length, y: origin.y + Math.cos(angle) * length });
   // Debris: chunky stone shards that fall under gravity, gold dust that drifts and glitters.
@@ -399,7 +419,8 @@
       length += 540 * dt;
       const p = hookPosition();
       // Match paint order when a patrolling pig crosses in front of stationary treasure.
-      caught = objects.findLast(o => !o.taken && Math.hypot(o.x - p.x, o.y - p.y) < o.radius + 8) || null;
+      caught = objects.findLast(o => !o.taken && Math.hypot(o.x - p.x, (o.y - p.y) / objectAspect) < o.radius + 8
+        + (magnetArmed && ['small', 'gold', 'large'].includes(o.type) ? 24 : 0)) || null;
       if (caught?.type === 'tnt') detonate(caught);
       else if (caught) {
         caught.taken = true; hookState = 'back'; tone(320, .08);
@@ -409,9 +430,12 @@
       }
       else if (p.x < 20 || p.x > W - 20 || p.y > H - 30) hookState = 'back';
     } else {
-      length -= 360 * (strength ? 2 : 1) / (caught ? caught.weight : .65) * dt;
+      const targetSpeed = 360 * (strength ? 2 : 1) / (caught ? caught.weight : .65);
+      // Loaded reels take time to overcome inertia, while an empty claw snaps home.
+      reelSpeed += (targetSpeed - reelSpeed) * (1 - Math.exp(-dt * (caught ? 4 : 12)));
+      length -= reelSpeed * dt;
       if (length <= 23) {
-        length = 23; hookState = 'swing';
+        length = 23; hookState = 'swing'; magnetArmed = false;
         if (caught) {
           const value = caught.type === 'diamondPig'
             ? 10 + Math.round((caught.value - 10) * (book ? diamondBonus : 1))
@@ -446,7 +470,7 @@
   function line(points, color, width = 2) { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke(); }
   function drawObject(obj, x = obj.x, y = obj.y) {
     const r = obj.radius;
-    ctx.save(); ctx.translate(x, y); ctx.rotate(obj.rotation);
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, objectAspect); ctx.rotate(obj.rotation);
     ellipse(3, r * .7, r * .9, r * .35, '#171b183a');
     if (obj.speed) {
       ctx.scale(obj.direction, 1);
@@ -458,15 +482,15 @@
       ctx.beginPath(); ctx.arc(-22, -4, 4, 0, Math.PI * 1.8);
       ctx.strokeStyle = '#e6a08c'; ctx.lineWidth = 3; ctx.stroke();
       ellipse(-3, 1, 22, 17, obj.color);
-      ellipse(-7, -5, 13, 7, '#f8c3b1');
-      ellipse(-2, 9, 13, 6, '#efb09b');
+      ellipse(-7, -5, 13, 7, '#bcaa88');
+      ellipse(-2, 9, 13, 6, '#806957');
       ellipse(12, -2, 13, 13, obj.color);
       polygon([[5,-11],[3,-22],[12,-18],[16,-11]], '#f3b6a6', '#bd7b70');
       polygon([[7,-13],[6,-19],[12,-16]], '#dc8d87');
-      ellipse(22, 1, 7, 5.5, '#ffc9b9');
+      ellipse(22, 1, 7, 5.5, '#bca183');
       ellipse(21, 1, 1.1, 1.7, '#a75e5b');
       ellipse(25, 1, 1.1, 1.7, '#a75e5b');
-      ellipse(11, 3, 4, 2.5, '#ed9290');
+      ellipse(11, 3, 4, 2.5, '#a9826a');
       ellipse(16, -6, 2.8, 3.3, '#352d29');
       ellipse(16.8, -7.2, 1, 1.2, '#fff8eb');
       ctx.beginPath(); ctx.arc(18, 5, 3, .15, Math.PI * .85);
@@ -506,9 +530,13 @@
       line([[-r*.66,r*.45],[0,r*.52],[r*.66,r*.45]], '#c6b88d', 3);
       ellipse(-r*.48, -r*.41, 1.3, 1.3, '#fff0c5');
       ellipse(r*.48, r*.49, 1.3, 1.3, '#fff0c5');
-      ctx.fillStyle = '#fff0c5'; ctx.fillRect(-r*.58, -r*.2, r*1.16, r*.5);
+      ctx.fillStyle = '#b4a17a'; ctx.fillRect(-r*.58, -r*.2, r*1.16, r*.5);
       ctx.strokeStyle = '#71352a'; ctx.lineWidth = 1; ctx.strokeRect(-r*.58, -r*.2, r*1.16, r*.5);
       ctx.fillStyle = '#782d25'; ctx.font = '900 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('TNT', 0, r*.19);
+      line([[3,-r*.76],[7,-r],[13,-r*.95]], '#665736', 2);
+      const spark = .5 + Math.sin(performance.now()*.009 + obj.id)*.5;
+      drawGlow(13,-r*.95,2,performance.now(),8,.2+spark*.3);
+      ellipse(13,-r*.95,1.2,1.2,'#ffe1a0');
     } else if (obj.type === 'bag') {
       polygon([[-9,-18],[-13,-27],[0,-23],[12,-27],[8,-16]], '#e0be8a');
       ctx.beginPath(); ctx.moveTo(-8,-15); ctx.bezierCurveTo(-31,9,-24,25,0,24); ctx.bezierCurveTo(26,23,29,8,8,-15); ctx.closePath(); ctx.fillStyle = '#bc905e';ctx.fill();
@@ -520,9 +548,9 @@
       ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath();
       const shade = ctx.createRadialGradient(-r * .35, -r * .5, r * .1, 0, 0, r * 1.55);
       if (rocky) {
-        shade.addColorStop(0, '#a8a899'); shade.addColorStop(.5, obj.color); shade.addColorStop(1, '#31352e');
+        shade.addColorStop(0, '#837b60'); shade.addColorStop(.5, '#4d4b3b'); shade.addColorStop(1, '#1d2521');
       } else {
-        shade.addColorStop(0, '#ffefb4'); shade.addColorStop(.42, obj.color); shade.addColorStop(1, '#6d4715');
+        shade.addColorStop(0, '#fff2b6'); shade.addColorStop(.2, '#ecb644'); shade.addColorStop(.43, '#966012'); shade.addColorStop(.6, '#432807'); shade.addColorStop(.8, '#b7791b'); shade.addColorStop(1, '#211406');
       }
       ctx.fillStyle = shade; ctx.fill();
       // Rim light: the lantern sits up-centre, so the upper-left edge catches a warm lip.
@@ -553,11 +581,11 @@
       if (!rocky) {
         ctx.globalCompositeOperation = 'lighter';   // specular hit where the lantern lands
         const spec = ctx.createRadialGradient(-r * .45, -r * .55, 0, -r * .45, -r * .55, r * 1.1);
-        spec.addColorStop(0, 'rgba(255,246,206,.7)'); spec.addColorStop(.4, 'rgba(255,206,110,.22)'); spec.addColorStop(1, 'rgba(255,160,60,0)');
+        spec.addColorStop(0, 'rgba(255,246,206,.4)'); spec.addColorStop(.4, 'rgba(255,206,110,.12)'); spec.addColorStop(1, 'rgba(255,160,60,0)');
         ctx.fillStyle = spec; ctx.fillRect(-r * 1.2, -r * 1.2, r * 2.4, r * 2.4);
         ctx.globalCompositeOperation = 'source-over';
-        polygon([[-r * .66, -r * .26], [-r * .5, -r * .62], [-r * .1, -r * .72], [-r * .14, -r * .3]], 'rgba(255,250,224,.95)');
-        polygon([[r * .52, r * .08], [r * .78, r * .36], [r * .42, r * .68], [r * .28, r * .28]], 'rgba(255,236,182,.45)');
+        polygon([[-r * .66, -r * .26], [-r * .5, -r * .62], [-r * .1, -r * .72], [-r * .14, -r * .3]], 'rgba(255,232,154,.3)');
+        polygon([[r * .52, r * .08], [r * .78, r * .36], [r * .42, r * .68], [r * .28, r * .28]], 'rgba(245,172,59,.23)');
         polygon([[-r * .9, -r * .06], [-r * .7, -r * .5], [-r * .34, -r * .56], [-r * .44, -r * .2]], 'rgba(255,222,150,.3)');
         // Twinkling star flares: facet glints that catch the lantern as the nugget sits.
         if (obj.glints) {
@@ -580,6 +608,7 @@
       } else {
         polygon([[-r * .8, -r * .2], [-r * .55, -r * .62], [0, -r * .8], [-r * .1, -r * .3]], 'rgba(216,214,192,.4)');
       }
+      ctx.drawImage(CavernArt.surface(obj.id, r, rocky), -r * 1.3, -r * 1.3, r * 2.6, r * 2.6);
       ctx.restore();
       polygon([[-r * .62, r * .42], [-r * .2, r * .62], [r * .44, r * .5], [r * .1, r * .74], [-r * .5, r * .68]], 'rgba(0,0,0,.22)');
     }
@@ -591,9 +620,6 @@
   const cone = document.createElement('canvas'); cone.width = W; cone.height = H;
   const vignette = document.createElement('canvas'); vignette.width = W; vignette.height = H;
   const background = document.createElement('canvas'); background.width = W; background.height = H;
-  // Quarter-res bloom target: the cheapest way to get real light bleed.
-  const bloom = document.createElement('canvas'); bloom.width = W >> 2; bloom.height = H >> 2;
-  const bloomCtx = bloom.getContext('2d');
   (function paintGlowSprite() {
     const c = GLOW.getContext('2d'), g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
     g.addColorStop(0, 'rgba(255,231,170,1)'); g.addColorStop(.22, 'rgba(255,197,105,.72)');
@@ -610,37 +636,7 @@
     floor.addColorStop(0, 'rgba(2,3,6,0)'); floor.addColorStop(1, 'rgba(1,2,4,.5)');
     c.fillStyle = floor; c.fillRect(0, H * .58, W, H * .42);
   })();
-  (function paintCone() {
-    const c = cone.getContext('2d');
-    c.globalCompositeOperation = 'lighter';
-    // The lantern's halo: what actually reads as "light" in the dark.
-    const halo = c.createRadialGradient(LAMP.x, LAMP.y, 0, LAMP.x, LAMP.y, 380);
-    halo.addColorStop(0, 'rgba(255,240,205,.85)');
-    halo.addColorStop(.08, 'rgba(255,222,160,.55)');
-    halo.addColorStop(.2, 'rgba(255,196,116,.3)');
-    halo.addColorStop(.38, 'rgba(255,170,84,.14)');
-    halo.addColorStop(.62, 'rgba(255,150,62,.05)');
-    halo.addColorStop(1, 'rgba(255,140,60,0)');
-    c.fillStyle = halo; c.fillRect(LAMP.x - 390, LAMP.y - 390, 780, 780);
-    const core = c.createRadialGradient(LAMP.x, LAMP.y, 0, LAMP.x, LAMP.y, 74);   // the flame itself
-    core.addColorStop(0, 'rgba(255,252,232,.95)');
-    core.addColorStop(.4, 'rgba(255,226,164,.4)');
-    core.addColorStop(1, 'rgba(255,180,90,0)');
-    c.fillStyle = core; c.fillRect(LAMP.x - 80, LAMP.y - 80, 160, 160);
-    // The beam itself, soft-edged and only where it can reach: below the platform.
-    const beam = c.createLinearGradient(0, 158, 0, H);
-    beam.addColorStop(0, 'rgba(255,214,150,.44)');
-    beam.addColorStop(.4, 'rgba(255,178,94,.21)');
-    beam.addColorStop(1, 'rgba(255,142,62,.05)');
-    c.fillStyle = beam;
-    c.beginPath(); c.moveTo(LAMP.x - 34, 158); c.lineTo(LAMP.x + 34, 158);
-    c.lineTo(LAMP.x + 430, H + 40); c.lineTo(LAMP.x - 380, H + 40); c.closePath(); c.fill();
-    c.globalCompositeOperation = 'destination-in';
-    const fade = c.createLinearGradient(LAMP.x - 420, 0, LAMP.x + 470, 0);
-    fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(.36, 'rgba(0,0,0,.8)');
-    fade.addColorStop(.6, 'rgba(0,0,0,1)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
-    c.fillStyle = fade; c.fillRect(0, 158, W, H - 158);
-  })();
+  CavernArt.paintLight(cone, LAMP);
   function drawGlow(x, y, r, now, spread = 4.6, base = .42) {
     const pulse = .72 + Math.sin(now * .0031 + x * .045 + y * .027) * .28;
     const s = r * spread * (.86 + pulse * .22);
@@ -651,121 +647,11 @@
   }
   // Paint the rock once per mine; the moving hook and treasures use the foreground canvas.
   function paintBackground(seed = 0) {
-    const c = background.getContext('2d');
-    const rand = random(90210 + seed * 173);
-    // Rock face behind the platform, then the timbered shaft mouth.
-    const back = c.createLinearGradient(0, 0, 0, 158);
-    back.addColorStop(0, '#0d0b09'); back.addColorStop(.6, '#2a2016'); back.addColorStop(1, '#15100c');
-    c.fillStyle = back; c.fillRect(0, 0, W, 158);
-    // Arch ribs in the shaft wall above the rig would read as ripples; skip them.
-    const shaft = c.createLinearGradient(LAMP.x, 0, LAMP.x, 158);
-    shaft.addColorStop(0, 'rgba(0,0,0,0)'); shaft.addColorStop(1, 'rgba(0,0,0,.55)');
-    c.fillStyle = shaft; c.fillRect(0, 0, W, 158);
-    // Strata: stacked bands of ancient stone, each with its own wave.
-    const strata = ['#4a4238', '#413a31', '#38322a', '#2f2a24', '#26221d', '#1d1a16'];
-    for (let i = 0; i < 12; i++) {
-      c.beginPath(); c.moveTo(0, 150 + i * 38);
-      for (let x = 0; x <= W; x += 25) c.lineTo(x, 150 + i * 38 + Math.sin(x * .011 + i * 2.3) * 10 + Math.sin(x * .034 + i) * 4);
-      c.lineTo(W, H); c.lineTo(0, H); c.closePath();
-      c.fillStyle = strata[i % strata.length]; c.fill();
-      c.strokeStyle = 'rgba(226,190,134,.13)'; c.lineWidth = 1.6; c.stroke();
-    }
-    // Chiselled rock planes: the facets that make stone read as stone.
-    for (let i = 0; i < 260; i++) {
-      const x = rand() * W, y = 160 + rand() * (H - 150), s = 26 + rand() * 96;
-      const pts = [[x - s * .5, y - s * .18], [x - s * .08, y - s * .55], [x + s * .55, y - s * .28], [x + s * .42, y + s * .45], [x - s * .32, y + s * .5]];
-      c.beginPath(); pts.forEach(([px, py], k) => k ? c.lineTo(px, py) : c.moveTo(px, py)); c.closePath();
-      c.fillStyle = rand() > .5 ? 'rgba(255,210,150,.055)' : 'rgba(0,0,0,.2)';
-      c.fill();
-      c.strokeStyle = rand() > .5 ? 'rgba(255,214,158,.08)' : 'rgba(0,0,0,.26)';
-      c.lineWidth = 1.1; c.stroke();
-    }
-    // Grain: per-pixel noise gives the rock its tooth.
-    const rock = c.getImageData(0, 150, W, H - 150), data = rock.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const n = (rand() - .5) * 26, warm = n * .25;
-      data[i] += n; data[i + 1] += n * .92 + warm; data[i + 2] += n * .78;
-    }
-    c.putImageData(rock, 0, 150);
-    // Cracks: dark fissures with a lit top lip, the way chiselled stone catches light.
-    for (let i = 0; i < 90; i++) {
-      let x = rand() * W, y = 165 + rand() * (H - 180);
-      c.beginPath(); c.moveTo(x, y);
-      const segments = 3 + Math.floor(rand() * 4);
-      let vx = (rand() - .5) * 40, vy = (rand() - .5) * 30;
-      for (let s = 0; s < segments; s++) {
-        vx += (rand() - .5) * 26; vy += (rand() - .5) * 22;
-        x += vx; y += vy;
-        c.quadraticCurveTo(x - vx * .5, y - vy * .5, x, y);
-      }
-      c.strokeStyle = 'rgba(0,0,0,.62)'; c.lineWidth = 1.2 + rand() * 2.6; c.stroke();
-      c.strokeStyle = 'rgba(232,196,138,.16)'; c.lineWidth = 1; c.stroke();
-    }
-    // Gravel speckle and embedded quartz chips.
-    for (let i = 0; i < 650; i++) {
-      const x = rand() * W, y = 160 + rand() * (H - 165), s = 1 + rand() * 3.2;
-      c.fillStyle = rand() > .55 ? 'rgba(232,208,160,.16)' : 'rgba(0,0,0,.28)';
-      c.beginPath(); c.ellipse(x, y, s, s * (.5 + rand() * .5), rand() * 3, 0, Math.PI * 2); c.fill();
-    }
-    // Gold veins thread through the cracks and glow faintly even in shadow.
-    for (let i = 0; i < 7; i++) {
-      const x0 = 60 + rand() * (W - 120), y0 = 190 + rand() * (H - 240);
-      const path = [[x0, y0]];
-      let px = x0, py = y0;
-      for (let s = 0; s < 3; s++) {
-        const cx = px + (rand() - .5) * 130, cy = py + (rand() - .5) * 80;
-        px += (rand() - .5) * 150; py += (rand() - .5) * 90;
-        path.push([cx, cy, px, py]);
-      }
-      c.globalCompositeOperation = 'lighter';
-      c.beginPath(); c.moveTo(x0, y0);
-      path.slice(1).forEach(([, , ex, ey]) => c.lineTo(ex, ey));
-      c.strokeStyle = 'rgba(255,178,68,.09)'; c.lineWidth = 2.2; c.lineCap = 'round'; c.stroke();
-      c.strokeStyle = 'rgba(255,222,150,.13)'; c.lineWidth = .9; c.stroke();
-      c.globalCompositeOperation = 'source-over';
-    }
-    // Gold flecks picked out along the stone.
-    c.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < 190; i++) {
-      const x = rand() * W, y = 165 + rand() * (H - 175), s = .9 + rand() * 2.6;
-      c.fillStyle = 'rgba(255,' + (190 + Math.floor(rand() * 40)) + ',110,' + (.12 + rand() * .22) + ')';
-      c.beginPath(); c.ellipse(x, y, s, s * (.5 + rand() * .6), rand() * 3, 0, Math.PI * 2); c.fill();
-    }
-    c.globalCompositeOperation = 'source-over';
-    // Depth: the stone drinks the light the further down it goes.
-    const depth = c.createLinearGradient(0, 170, 0, H);
-    depth.addColorStop(0, 'rgba(6,7,10,0)'); depth.addColorStop(1, 'rgba(3,4,7,.34)');
-    c.fillStyle = depth; c.fillRect(0, 170, W, H - 170);
-    // Cold ambient: the far rock is never purely black, it goes blue.
-    const ambient = c.createLinearGradient(0, 150, 0, H);
-    ambient.addColorStop(0, 'rgba(74,96,138,.07)');
-    ambient.addColorStop(.5, 'rgba(58,76,116,.05)');
-    ambient.addColorStop(1, 'rgba(40,54,88,.04)');
-    c.fillStyle = ambient; c.fillRect(0, 150, W, H - 150);
-    // Vertical shaft props at the frame edges keep the platform feeling underground.
-    for (const px of [8, W - 30]) {
-      c.fillStyle = '#3a2b1a'; c.fillRect(px, 40, 22, 96);
-      c.fillStyle = 'rgba(196,150,88,.28)'; c.fillRect(px, 40, 4, 96);
-      c.fillStyle = 'rgba(0,0,0,.5)'; c.fillRect(px + 18, 40, 4, 96);
-      c.fillStyle = '#2c2013'; c.fillRect(px - 6, 34, 34, 9);
-    }
-    // The platform floor: packed dirt with a lit lip.
-    c.fillStyle = '#493827'; c.fillRect(0, 132, W, 22);
-    c.fillStyle = '#75592f'; c.fillRect(0, 132, W, 3);
-    for (let x = 18; x < W; x += 44) { c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(x, 136, 6, 16); }
-    const dirt = c.createLinearGradient(0, 132, 0, 160);
-    dirt.addColorStop(0, 'rgba(0,0,0,0)'); dirt.addColorStop(1, 'rgba(0,0,0,.72)');
-    c.fillStyle = dirt; c.fillRect(0, 132, W, 28);
-    for (let i = 0; i < 300; i++) {
-      const x = rand() * W, y = 133 + rand() * 24;
-      c.fillStyle = rand() > .5 ? 'rgba(238,200,140,.22)' : 'rgba(0,0,0,.42)';
-      c.fillRect(x, y, 1 + rand() * 3, 1 + rand() * 2);
-    }
+    CavernArt.paintBackground(background, seed, LAMP);
   }
   // The rig: timber headframe, winch, ore cart heaped with gold, and the one lantern that lights the shaft.
   function drawRig(now) {
     const flicker = .82 + Math.sin(now * .013) * .06 + Math.sin(now * .041) * .05 + Math.sin(now * .0073) * .05;
-    // Headframe: two braced legs and a crossbeam over the shaft.
     ctx.fillStyle = '#3a2a17';
     ctx.save(); ctx.translate(520, 132); ctx.rotate(-.19); ctx.fillRect(-7, -50, 14, 52); ctx.fillStyle = 'rgba(214,166,96,.3)'; ctx.fillRect(-7, -50, 3, 52); ctx.restore();
     ctx.fillStyle = '#3a2a17';
@@ -773,7 +659,6 @@
     ctx.fillStyle = '#4a361e'; ctx.fillRect(505, 80, 90, 11);
     ctx.fillStyle = 'rgba(224,176,104,.34)'; ctx.fillRect(505, 80, 90, 2.5);
     line([[520, 96], [580, 96]], '#33260f', 4);
-    // Winch drum and crank.
     ellipse(550, 106, 20, 20, '#1f1a13');
     ellipse(550, 106, 16, 16, '#5c4e39');
     ellipse(550, 106, 7, 7, '#14110d');
@@ -788,35 +673,48 @@
     const cart = () => { ctx.beginPath(); ctx.moveTo(646, 94); ctx.lineTo(780, 94); ctx.lineTo(764, 132); ctx.lineTo(662, 132); ctx.closePath(); };
     cart();
     const steel = ctx.createLinearGradient(646, 94, 780, 132);
-    steel.addColorStop(0, '#57493c'); steel.addColorStop(.35, '#332b23'); steel.addColorStop(1, '#1a1512');
+    steel.addColorStop(0, '#c49a58'); steel.addColorStop(.12, '#655442'); steel.addColorStop(.38, '#333532'); steel.addColorStop(.52, '#777062'); steel.addColorStop(.56, '#3b3932'); steel.addColorStop(.85, '#24231f'); steel.addColorStop(1, '#0c1010');
     ctx.fillStyle = steel; ctx.fill();
     ctx.strokeStyle = '#6f5f4a'; ctx.lineWidth = 2; ctx.stroke();
     ctx.save(); cart(); ctx.clip();
-    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(646, 118, 134, 16);
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(646, 120, 134, 14);
+    line([[646,95],[780,95]], '#edc47b', 1); line([[650,98],[777,98]], '#171914', 2);
+    ctx.globalAlpha=.4; ctx.drawImage(CavernArt.surface(404,60,true),646,94,134,40); ctx.globalAlpha=1;
     ctx.restore();
     // Gold heaped over the rim, irregular as it was shovelled in.
     const jitter = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
     for (let i = 0; i < 13; i++) {
       const gx = 648 + i * 10.5 + jitter(i) * 7, gy = 92 - Math.sin(i * .9) * 6 - jitter(i + 7) * 8;
       const s = .8 + jitter(i + 3) * .55;
-      polygon([[gx - 8 * s, gy + 5 * s], [gx - 6 * s, gy - 5 * s], [gx + 2 * s, gy - 9 * s], [gx + 8 * s, gy - 1 * s], [gx + 4 * s, gy + 6 * s]], '#c8892c', '#7d5417');
-      polygon([[gx - 6 * s, gy - 5 * s], [gx + 2 * s, gy - 9 * s], [gx + 1 * s, gy - 2 * s], [gx - 3 * s, gy + 1 * s]], '#ffe490');
+      polygon([[gx - 8 * s, gy + 5 * s], [gx - 6 * s, gy - 5 * s], [gx + 2 * s, gy - 9 * s], [gx + 8 * s, gy - 1 * s], [gx + 4 * s, gy + 6 * s]], '#987022', '#4e3516');
+      polygon([[gx - 6 * s, gy - 5 * s], [gx + 2 * s, gy - 9 * s], [gx + 1 * s, gy - 2 * s], [gx - 3 * s, gy + 1 * s]], '#dbb662');
     }
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .66 * flicker;
+    ctx.globalAlpha = .22 * flicker;
     ctx.drawImage(GLOW, 662, 46, 130, 110);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (const wx of [666, 758]) {
       ellipse(wx, 133, 12, 12, '#0f0d0b'); ellipse(wx, 133, 7, 7, '#3a3128');
       ellipse(wx - 2, 130, 2.2, 2.2, '#9c8867');
     }
+    // Riveted reinforcing straps and scored steel panels on the cart.
+    for (const x of [669, 707, 751]) {
+      line([[x, 98], [x + (713 - x) * .12, 126]], '#89704766', 3);
+      for (const y of [101, 123]) { ellipse(x, y, 1.7, 1.7, '#0b100e'); ellipse(x-.4,y-.5,.65,.65,'#b99b62'); }
+    }
+    for (let i=0;i<15;i++) line([[659+i*7,108+i%4],[669+i*7,107+i%4]], '#b6975522', .6);
     // Lantern post and the single light of the mine.
     line([[622, 94], [622, 80]], '#241d15', 4);
     line([[613, 76], [631, 76]], '#241d15', 3);
     ellipse(LAMP.x, LAMP.y, 12, 14, '#1c1610');
     ellipse(LAMP.x, LAMP.y, 9, 11, 'rgba(255,190,96,' + (.9 * flicker) + ')');
     ellipse(LAMP.x, LAMP.y + 2, 4.5, 5.5, 'rgba(255,246,214,' + flicker + ')');
-    ellipse(LAMP.x, LAMP.y - 14, 5, 3, '#241d15');
+    ellipse(LAMP.x, LAMP.y - 14, 7, 3, '#544527');
+    ellipse(LAMP.x, LAMP.y + 12, 8, 3, '#55401e');
+    for (const x of [LAMP.x-7,LAMP.x+7]) line([[x,LAMP.y-10],[x,LAMP.y+11]], '#3a321d', 1.7);
+    ctx.beginPath(); ctx.arc(LAMP.x,LAMP.y-16,5,Math.PI,0); ctx.strokeStyle='#96723a'; ctx.lineWidth=1.5; ctx.stroke();
+    line([[LAMP.x-5,LAMP.y-8],[LAMP.x-5,LAMP.y+7]], '#fff2b8', 1);
+    line([[LAMP.x-8,LAMP.y+12],[LAMP.x+8,LAMP.y+12]], '#d2a44c', 1);
     // The miner: a silhouette rimmed by his own lantern.
     ctx.save();
     ctx.fillStyle = '#05060a'; ctx.strokeStyle = '#05060a'; ctx.lineCap = 'round';
@@ -838,6 +736,19 @@
     ctx.beginPath(); ctx.moveTo(494, 88); ctx.lineTo(488, 114); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(490, 110); ctx.lineTo(488, 134); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(460, 134); ctx.lineTo(467, 112); ctx.stroke();
+    const coat = ctx.createLinearGradient(451,85,492,112);
+    coat.addColorStop(0,'#121a19'); coat.addColorStop(1,'#484230');
+    polygon([[451,88],[471,84],[488,90],[485,111],[456,111]], coat);
+    line([[465,88],[463,109]], '#887343', 2);
+    line([[482,89],[479,109]], '#887343', 2);
+    polygon([[471,72],[481,70],[481,79],[475,84],[469,78]], '#8f734b');
+    polygon([[469,76],[481,76],[478,85],[472,83]], '#a49b7b');
+    line([[488,92],[511,99],[532,102]], '#514c37', 7);
+    ellipse(532,102,4,3,'#a38a58');
+    line([[453,115],[450,130]], '#25312c', 8);
+    line([[476,115],[480,130]], '#30382e', 8);
+    line([[449,133],[459,133]], '#121512', 4);
+    line([[478,133],[490,133]], '#121512', 4);
     ctx.restore();
     return flicker;
   }
@@ -845,7 +756,7 @@
   function drawChain(from, to, tension, now) {
     const dx = to.x - from.x, dy = to.y - from.y;
     const dist = Math.max(1, Math.hypot(dx, dy));
-    const links = Math.max(3, Math.min(58, Math.round(dist / 15)));
+    const links = Math.max(3, Math.min(110, Math.round(dist / 8)));
     const nx = -dy / dist, ny = dx / dist;
     ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y);
     ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3.4; ctx.stroke();
@@ -866,12 +777,14 @@
     }
   }
   function drawClaw(p, now) {
-    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(-angle);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, objectAspect); ctx.rotate(-angle);
+    if (magnetArmed) drawGlow(0, 0, 16, now, 5, .25);
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = .24;
     ctx.drawImage(GLOW, -50, -50, 100, 100);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-    for (const a of [-1.2, -.44, .44, 1.2]) {          // four open prongs
+    for (const spread of [-1.2, -.44, .44, 1.2]) {
+      const a = spread * (caught ? .48 : 1);          // four open prongs
       ctx.save(); ctx.rotate(a);
       ctx.beginPath();
       ctx.moveTo(-3.4, -3); ctx.quadraticCurveTo(-10, 9, -4.4, 20);
@@ -925,10 +838,11 @@
     const amp = shakeMag * (shakeTime / .4);
     if (amp > .08) ctx.translate(Math.sin(now * .09) * amp, Math.cos(now * .13) * amp * .7);
     ctx.drawImage(background, 0, 0);
-    const flicker = drawRig(now);
+    ctx.save(); ctx.translate(origin.x, origin.y); ctx.scale(1, objectAspect); ctx.translate(-origin.x, -origin.y);
+    const flicker = drawRig(now); ctx.restore();
     // Light and haze before the treasure so gold sits inside the glow.
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .9 * flicker;
+    ctx.globalAlpha = .7 * flicker;
     ctx.drawImage(cone, 0, 0);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     // Dust motes drifting through the beam.
@@ -937,16 +851,16 @@
       const dx = LAMP.x + Math.sin(i * 2.7 + now * .0004) * (60 + i * 9);
       const dy = LAMP.y + ((t * 900 + i * 63) % (H + 60));
       const near = 1 - Math.min(1, Math.abs(dx - LAMP.x) / 620);
-      ctx.globalAlpha = .1 + near * .32 * (.6 + Math.sin(now * .002 + i) * .4);
+      ctx.globalAlpha = .055 + near * .24 * (.6 + Math.sin(now * .002 + i) * .4);
       ctx.fillStyle = '#ffdca4';
-      const size = 1.6 + (i % 3) * .7;
+      const size = .45 + (i % 3) * .4;
       ctx.fillRect(dx, dy, size, size);
     }
     ctx.globalAlpha = 1;
     // Contact shadow: the platform edge swallows the first few pixels of rock.
-    const lip = ctx.createLinearGradient(0, 158, 0, 205);
+    const lip = ctx.createLinearGradient(0, 145, 0, 192);
     lip.addColorStop(0, 'rgba(0,0,0,.6)'); lip.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = lip; ctx.fillRect(0, 158, W, 47);
+    ctx.fillStyle = lip; ctx.fillRect(396, 145, 404, 47);
     for (const o of objects) {
       if (o.taken) continue;
       // Ambient occlusion: the rock is darker right around a buried object.
@@ -958,26 +872,23 @@
       if (o.type !== 'rock' && o.type !== 'tnt' && !o.speed) drawGlow(o.x, o.y, o.radius, now, o.type === 'diamond' || o.type === 'gem' ? 3.4 : 3.7, o.type === 'large' ? .24 : .2);
       drawObject(o);
       ctx.globalAlpha = 1;
+      if (now < revealUntil && o.value > 0) {
+        ctx.font = '600 12px Georgia'; ctx.textAlign = 'center'; ctx.lineWidth = 4;
+        ctx.strokeStyle = '#080c0e'; ctx.strokeText(money(o.value), o.x, o.y - o.radius - 10);
+        ctx.fillStyle = '#f1ce7e'; ctx.fillText(money(o.value), o.x, o.y - o.radius - 10);
+      }
     }
     const p = hookPosition();
     const reel = hookState === 'back' && caught ? Math.min(1, caught.weight / 4) : 0;
-    drawChain({ x: origin.x, y: 112 }, p, reel * 7 + (hookState === 'back' ? 1.2 : 0), now);
-    if (caught) drawObject(caught, p.x, p.y + caught.radius * .95);
+    drawChain({ x: origin.x, y: origin.y - 20 * objectAspect }, p, hookState === 'back' ? .6 + reel * 1.6 : 3, now);
+    if (caught) drawObject(caught, p.x, p.y + caught.radius * .95 * objectAspect);
     drawClaw(p, now);   // the claw grips from above, so it draws over the catch
-    // Second lighting pass: the beam falls on the treasure too, so anything inside the
-    // lantern's cone warms up and anything outside stays in the dark.
+    // A faint second pass warms the treasure without obscuring its silhouette.
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .42 * flicker;
+    ctx.globalAlpha = .16 * flicker;
     ctx.drawImage(cone, 0, 0);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     drawParticles();
-    // Bloom: the whole frame downsampled and added back, so every light source bleeds.
-    bloomCtx.clearRect(0, 0, bloom.width, bloom.height);
-    bloomCtx.drawImage(ctx.canvas, 0, 0, bloom.width, bloom.height);
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .26 * (.88 + flicker * .12);
-    ctx.drawImage(bloom, 0, 0, W, H);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (const pop of popups) {
       const grow = Math.min(1, (1.6 - pop.life) * 6), alpha = Math.min(1, pop.life);
       ctx.save(); ctx.globalAlpha = alpha;
@@ -1008,8 +919,8 @@
   let music = false, musicNodes = null, shakeScale = 1;
   try {
     music = localStorage.getItem('gm-music') === '1';
-    const stored = Number(localStorage.getItem('gm-shake'));
-    if (Number.isFinite(stored) && stored >= 0 && stored <= 1) shakeScale = stored;
+    const setting = localStorage.getItem('gm-shake'), stored = Number(setting);
+    if (setting !== null && Number.isFinite(stored) && stored >= 0 && stored <= 1) shakeScale = stored;
   } catch {}
   function updateMusic() {
     if (music && musicNodes) { audio.resume(); return; }
@@ -1059,6 +970,13 @@
   for (const button of document.querySelectorAll('.action-item')) {
     button.addEventListener('pointerdown', event => { if (!button.disabled) burst(canvasPoint(event), 'gold'); });
   }
+  $('strength-item').onclick = () => notify('Strength active: double pulling speed for this mine.');
+  $('book-item').onclick = () => { if (phase === 'playing' && book) { revealUntil = performance.now() + 6000; tone(920); } };
+  $('magnet-item').onclick = () => {
+    if (phase !== 'playing' || !magnet || hookState !== 'swing') return;
+    magnetArmed = !magnetArmed; tone(480); updateHUD(); saveProgress();
+    notify(magnetArmed ? 'Magnetic claw armed for your next launch.' : 'Magnetic claw stowed.');
+  };
   $('dynamite').onclick=explode;$('pause').onclick=pause;
   canvas.addEventListener('pointerdown',event=>{event.preventDefault();canvas.focus({preventScroll:true});if(music&&audio)audio.resume();drop();});
   document.addEventListener('keydown',event=>{

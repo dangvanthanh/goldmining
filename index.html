@@ -7,26 +7,27 @@
   <title>Gold Mining | Deep Shaft No. 7</title>
   <link rel="stylesheet" href="style.css">
   <script src="vendor/dexie.min.js" defer></script>
+  <script src="cavern-art.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
   <main>
-    <section id="game-shell" class="game-shell" aria-label="Pirate treasure hunt game">
+    <section id="game-shell" class="game-shell" aria-label="Gold mining expedition">
       <div class="mine-wrap"><canvas id="mine" width="1100" height="580" tabindex="0" aria-label="Mine field. Press Down Arrow or Space to drop the swinging hook. Press D to use dynamite.">Your browser needs Canvas support to play Gold Mining.</canvas>
         <div class="hud plaque" role="group" aria-label="Expedition status">
           <div class="plaque-row plaque-score"><span class="hud-label">Current score</span><strong class="gold-shine" id="haul">$0</strong></div>
           <div class="plaque-row plaque-goal"><span class="hud-label">Target · <b id="goal">$650</b></span><div class="progress"><i id="progress"></i></div></div>
-          <div class="plaque-row plaque-time"><span class="hud-label">Time left</span><span id="timer-wrap" class="timer-wrap"><span class="hourglass" aria-hidden="true">⏳</span><strong id="timer">01:00</strong></span></div>
+          <div class="plaque-row plaque-time"><span class="hud-label">Time left</span><span id="timer-wrap" class="timer-wrap"><span class="hourglass" aria-hidden="true">⌛</span><strong id="timer">01:00</strong></span></div>
         </div>
         <div class="hud hud-top-right">
           <button id="pause" class="gear-button" aria-label="Pause game" disabled><span aria-hidden="true">Ⅱ</span></button>
           <button id="settings" class="gear-button" aria-label="Open settings" aria-haspopup="dialog"><span aria-hidden="true">⚙</span></button>
         </div>
         <div class="hud action-bar" role="group" aria-label="Mining gear">
-          <button id="dynamite" class="action-item" disabled><span class="item-icon" aria-hidden="true">🧨</span><span id="dynamite-count" class="badge" aria-hidden="true">0</span><kbd>D</kbd><span class="visually-hidden">Dynamite</span></button>
-          <button id="strength-item" class="action-item" disabled><span class="item-icon" aria-hidden="true">⚡</span><span class="badge" id="strength-count" aria-hidden="true">0</span><span class="visually-hidden">Strength drink</span></button>
-          <button id="book-item" class="action-item" disabled><span class="item-icon" aria-hidden="true">🔭</span><span class="badge" id="book-count" aria-hidden="true">0</span><span class="visually-hidden">Binoculars</span></button>
-          <div class="action-slot" aria-hidden="true"></div>
+          <button id="dynamite" class="action-item" disabled><span class="item-icon icon-dynamite" aria-hidden="true"></span><span id="dynamite-count" class="badge" aria-hidden="true">0</span><kbd>D</kbd><span class="visually-hidden">Dynamite</span></button>
+          <button id="strength-item" class="action-item" disabled title="Strength drink: double pulling speed for this mine"><span class="item-icon icon-potion" aria-hidden="true"></span><span class="badge" id="strength-count" aria-hidden="true">0</span><span class="visually-hidden">Strength drink</span></button>
+          <button id="book-item" class="action-item" disabled title="Reveal treasure values. Diamond book increases diamond value."><span class="item-icon icon-binoculars" aria-hidden="true"></span><span class="badge" id="book-count" aria-hidden="true">0</span><span class="visually-hidden">Binoculars</span></button>
+          <button id="magnet-item" class="action-item" disabled title="Magnetic claw: collect nearby gold on your next launch"><span class="item-icon icon-magnet" aria-hidden="true"></span><span class="badge" id="magnet-count" aria-hidden="true">0</span><span class="visually-hidden">Magnetic claw upgrade</span></button>
           <div class="action-slot" aria-hidden="true"></div>
         </div>
         <div class="hud hud-hint"><span id="location">01 — SUNSET CREEK</span><span class="hint-keys"><span class="key">↓</span> / SPACE · TAP THE FIELD TO DROP</span></div>
