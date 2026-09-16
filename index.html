@@ -3,23 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#103e49">
-  <title>Gold Mining | A Pirate’s Treasure Hunt</title>
+  <meta name="theme-color" content="#0d0b09">
+  <title>Gold Mining | Deep Shaft No. 7</title>
   <link rel="stylesheet" href="style.css">
   <script src="vendor/dexie.min.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">⚓</span> GOLD MINING</a><span class="edition">THE JOLLY HOOK CREW <span>FORTUNE & GLORY</span></span><button id="sound" class="icon-button" aria-label="Enable sound" aria-pressed="false">Sound off</button></header>
   <main>
-    <div class="intro"><div><div class="eyebrow"><span></span> AHOY, TREASURE HUNTER!</div><h1>Big adventure.<br><em>Bigger booty.</em></h1><p>Grab your hook, captain. There’s treasure beneath these shores.</p></div><div class="expedition">YOUR VOYAGE <strong><span id="level-number">01</span> <small id="level-total">/ 100</small></strong></div></div>
     <section id="game-shell" class="game-shell" aria-label="Pirate treasure hunt game">
-      <div class="dashboard"><div class="stat"><span>YOUR BOOTY</span><strong class="gold" id="haul">$0</strong></div><div class="stat goal-stat"><span>TREASURE GOAL</span><strong id="goal">$650</strong><div class="progress"><i id="progress"></i></div></div><div class="stat"><span>TIME LEFT</span><strong id="timer">01:00</strong></div><button id="pause" class="icon-button" aria-label="Pause game" disabled>Ⅱ <span>Pause</span></button><button id="fullscreen" class="icon-button" aria-label="Enter fullscreen" aria-pressed="false" aria-controls="game-shell" hidden>⛶ <span>Fullscreen</span></button></div>
-      <div class="mine-wrap"><canvas id="mine" width="1100" height="580" tabindex="0" aria-label="Mine field. Press Down Arrow or Space to drop the swinging hook. Press D to use dynamite.">Your browser needs Canvas support to play Gold Mining.</canvas><div class="location"><span class="location-dot"></span><span id="location">01 — SUNSET CREEK</span></div><div class="depth">X MARKS THE LOOT · WATCH OUT FOR TNT</div><div id="overlay" class="overlay"><div id="dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></div></div><div id="toast" class="toast" role="status" aria-live="polite"></div></div>
-      <div class="controls"><div class="control-tip"><span class="key">↓</span><div><strong>Steady… aim… yo-ho!</strong><span>Tap the field or press ↓ / Space to drop.</span></div></div><div class="action-buttons"><button id="dynamite" class="secondary" disabled><span class="item-icon" aria-hidden="true">🧨</span> Dynamite <span id="dynamite-count">0</span><kbd>D</kbd></button><button id="drop" class="primary" disabled>Drop hook <span>↓</span></button></div></div>
+      <div class="mine-wrap"><canvas id="mine" width="1100" height="580" tabindex="0" aria-label="Mine field. Press Down Arrow or Space to drop the swinging hook. Press D to use dynamite.">Your browser needs Canvas support to play Gold Mining.</canvas>
+        <div class="hud plaque" role="group" aria-label="Expedition status">
+          <div class="plaque-row plaque-score"><span class="hud-label">Current score</span><strong class="gold-shine" id="haul">$0</strong></div>
+          <div class="plaque-row plaque-goal"><span class="hud-label">Target · <b id="goal">$650</b></span><div class="progress"><i id="progress"></i></div></div>
+          <div class="plaque-row plaque-time"><span class="hud-label">Time left</span><span id="timer-wrap" class="timer-wrap"><span class="hourglass" aria-hidden="true">⏳</span><strong id="timer">01:00</strong></span></div>
+        </div>
+        <div class="hud hud-top-right">
+          <button id="pause" class="gear-button" aria-label="Pause game" disabled><span aria-hidden="true">Ⅱ</span></button>
+          <button id="settings" class="gear-button" aria-label="Open settings" aria-haspopup="dialog"><span aria-hidden="true">⚙</span></button>
+        </div>
+        <div class="hud action-bar" role="group" aria-label="Mining gear">
+          <button id="dynamite" class="action-item" disabled><span class="item-icon" aria-hidden="true">🧨</span><span id="dynamite-count" class="badge" aria-hidden="true">0</span><kbd>D</kbd><span class="visually-hidden">Dynamite</span></button>
+          <button id="strength-item" class="action-item" disabled><span class="item-icon" aria-hidden="true">⚡</span><span class="badge" id="strength-count" aria-hidden="true">0</span><span class="visually-hidden">Strength drink</span></button>
+          <button id="book-item" class="action-item" disabled><span class="item-icon" aria-hidden="true">🔭</span><span class="badge" id="book-count" aria-hidden="true">0</span><span class="visually-hidden">Binoculars</span></button>
+          <div class="action-slot" aria-hidden="true"></div>
+          <div class="action-slot" aria-hidden="true"></div>
+        </div>
+        <div class="hud hud-hint"><span id="location">01 — SUNSET CREEK</span><span class="hint-keys"><span class="key">↓</span> / SPACE · TAP THE FIELD TO DROP</span></div>
+        <div id="overlay" class="overlay"><div id="dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></div></div>
+        <div id="settings-overlay" class="settings-overlay" hidden><div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+          <h2 id="settings-title">Settings</h2>
+          <label class="setting-row"><span>Sound effects</span><input type="checkbox" id="sound-toggle" role="switch"></label>
+          <label class="setting-row"><span>Music</span><input type="checkbox" id="music-toggle" role="switch"></label>
+          <label class="setting-row"><span>Shake &amp; vibration</span><input type="range" id="shake-range" min="0" max="100" step="10" value="100"></label>
+          <button id="settings-close" class="primary">Back to the shaft</button>
+        </div></div>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+      </div>
     </section>
-    <section class="field-guide"><div class="guide-title"><span class="eyebrow">KNOW YOUR TREASURE</span><h2>The captain’s guide</h2><p>A little know-how for a legendary haul.</p></div><div class="treasure"><span class="specimen nugget" aria-hidden="true">🪙</span><div><strong>Gold nuggets</strong><span>Reliable value · Bigger pulls slower</span></div></div><div class="treasure"><span class="specimen diamond" aria-hidden="true">💎</span><div><strong>Diamonds & gems</strong><span>Quick rewards · Precise aim</span></div></div><div class="treasure"><span class="specimen bag" aria-hidden="true">💰</span><div><strong>Mystery bags</strong><span>Variable reward · Take a chance</span></div></div><div class="hazard-note"><span aria-hidden="true">🧨</span><p><strong>Mind the trouble, matey.</strong> Rocks pull slowly. TNT destroys nearby loot. Use purchased dynamite to ditch a heavy catch.</p></div></section>
-    <footer><span>A LITTLE LUCK. A LOT OF LOOT.</span><span><span id="expedition-summary">100 mines. One golden adventure.</span> <span class="footer-star">✦</span></span></footer>
   </main>
 </body>
 </html>

@@ -161,7 +161,8 @@ Existing treasure layouts and object IDs remain unchanged for saved-game compati
 
 Completed checks:
 
-- Pirate UI refresh: `node --check game.js` and `git diff --check` passed. Headless Chromium checks passed for welcome/start, keyboard drop, mobile tap, pause/resume, saved reload/resume, dialog focus containment, and no horizontal overflow at 320px and 390px. Desktop and mobile screenshots reviewed. Ocean scenery, palm trees, pirate captain, parchment dialogs, and treasure/hazard guidance replace the prospector presentation; maps, economy, and save format are unchanged. Audio, actual-device touch, fullscreen, and all shop/result visual states still need manual review.
+- Full-viewport shell UI: `node --check game.js` passed. The page is now a single `#game-shell` filling the viewport (flex column: dashboard, mine, controls); the topbar, intro, field-guide, and footer were removed, and the fullscreen button and its Fullscreen API wiring were removed with it. The sound toggle lives in the dashboard beside Pause. `updateHUD` no longer writes to the removed level/summary elements. Headless Chromium checks at 1280×800, 1100×580, and 390×720 confirmed the shell fills the viewport exactly, playthrough works, and there are no console errors at ~60fps.
+- Canvas presentation pass: procedural lumpy nugget/boulder silhouettes with seeded facets, stone fissures on rocks, twinkling facet glints on gold, and lantern-side gradient rim lighting on gold and rock outlines. Verified live via headless screenshots (light, glow, chain tension, catch popups, gold-dust bursts, screen shake) with no page errors.
 
 - Economy: `node --check game.js` and `git diff --check` passed. A temporary Node VM comparison verified all 100 deterministic treasure budgets, value roles, integer rewards, diamond-pig payouts, monotonic shop prices, actual purchase deductions, invalid/duplicate/unaffordable purchase rejection, pack limits, revised book scoring, and legacy save acceptance. All 100 layouts, IDs, radii, weights, and movement speeds matched the pre-balance version.
 - A simple ray-aiming bot starting each mine with zero bank and no upgrades won 90/100 before and after tuning; all first 20 mines passed after tuning. Remaining failures were mines 23, 25, 35, 57, 75, 79, 82, 84, 85, and 88. This smoke simulation is not a human difficulty benchmark or proof of universal winnability; those layouts need focused playtesting.
@@ -205,4 +206,4 @@ Manual browser checklist:
 - Close and reopen the browser on the same origin; resume the saved expedition.
 - Block IndexedDB; confirm the warning appears and the game still runs.
 
-The graphics use native Canvas 2D. UI, controls, and shop use semantic HTML. The spatial aiming playfield is visual; a nonvisual gameplay mode is not included.
+The graphics use native Canvas 2D. UI, controls, and shop use semantic HTML. The page renders as one full-viewport game shell (dashboard HUD above the canvas, action controls below); there is no separate topbar, intro, field-guide, footer, or fullscreen mode. The spatial aiming playfield is visual; a nonvisual gameplay mode is not included.
