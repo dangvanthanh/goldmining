@@ -951,7 +951,7 @@
     }
   }
   $('settings').onclick = () => { $('settings-overlay').hidden = false; $('settings-close').focus(); };
-  $('settings-close').onclick = () => { $('settings-overlay').hidden = true; canvas.focus({ preventScroll: true }); };
+  $('settings-close').onclick = () => { $('settings-overlay').hidden = true; if (!$('welcome-overlay').hidden) $('welcome-new').focus(); else canvas.focus({ preventScroll: true }); };
   $('settings-overlay').addEventListener('pointerdown', event => { if (event.target === $('settings-overlay')) $('settings-close').onclick(); });
   $('sound-toggle').onchange = () => { sound = $('sound-toggle').checked; if (sound) tone(); saveProgress(); };
   $('music-toggle').onchange = () => { music = $('music-toggle').checked; try { localStorage.setItem('gm-music', music ? '1' : '0'); } catch {} updateMusic(); };
@@ -991,11 +991,40 @@
   document.addEventListener('visibilitychange',()=>{if(document.hidden){if(phase==='playing')pause();else saveProgress();}});
   window.addEventListener('pagehide',()=>{if(phase==='playing')pause();else saveProgress();});
   paintBackground();objects=makeMap(0);updateHUD();
-  showDialog('<span class="badge">CAPTAIN’S LOG</span><h2>Loading your expedition…</h2>');
-  loadProgress().then(restored => {
-    if (restored) return;
-    showDialog('<span class="badge">DOWN THE SHAFT</span><h2>Treasure awaits, miner!</h2><p>One swinging claw. Sixty seconds. A shaft full of buried gold.<br>Reach the target to move on to the next mine.</p><div class="instructions"><span>↓ / Space to drop</span><span>D for dynamite</span><span>Tap to play</span></div><button class="primary" id="start">Let’s dig →</button>');
-    $('start').onclick=startLevel;
-  });
+  const welcome = $('welcome-overlay');
+  function showWelcome() { welcome.hidden = false; welcome.querySelector('button:not(:disabled)')?.focus(); }
+  // Probe storage so Continue only lights up when an expedition actually exists.
+  const probe = new Dexie('GoldMining');
+  probe.version(1).stores({ saves: 'id' });
+  probe.saves.get('expedition')
+    .then(save => { $('welcome-continue').disabled = !save; })
+    .catch(() => { $('welcome-continue').disabled = true; });
+  $('welcome-new').onclick = () => {
+    welcome.hidden = true;
+    level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false;
+    startLevel();
+  };
+  $('welcome-continue').onclick = async () => {
+    welcome.hidden = true;
+    if (!await loadProgress()) showWelcome();   // invalid save: fall back to the menu
+  };
+  $('welcome-guide').onclick = () => {
+    welcome.hidden = true;
+    showDialog(`<span class="badge">MINER’S HANDBOOK</span><h2>How to dig</h2>
+      <p><strong>Controls.</strong> ↓ / Space or tap the field to drop the claw. D fires dynamite. P or Esc pauses.</p>
+      <p><strong>Mines.</strong> Reach the target within 60 seconds; leftover gold carries to the next shaft. Miss the target and you dig the same mine again.</p>
+      <p><strong>Supplies shop.</strong> Between mines you spend surplus gold on gear. Prices rise with the next mine’s target:</p>
+      <ul class="guide-items">
+        <li><strong>Dynamite</strong> — destroys your current catch</li>
+        <li><strong>Strength drink</strong> — 2× pulling speed for the next mine</li>
+        <li><strong>Diamond book</strong> — 1.5× diamond value for the next mine</li>
+        <li><strong>Magnetic claw</strong> — wider gold capture; arm it before your next launch</li>
+      </ul>
+      <p>Diamonds are light and valuable, TNT destroys everything nearby, and mystery bags hold a surprise. Good digging!</p>
+      <button class="primary" id="guide-back">Back</button>`);
+    $('guide-back').onclick = showWelcome;
+  };
+  $('welcome-settings').onclick = () => { $('settings-overlay').hidden = false; $('settings-close').focus(); };
+  showWelcome();
   requestAnimationFrame(frame);
 })();
