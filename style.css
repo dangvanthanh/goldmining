@@ -65,13 +65,31 @@ kbd{position:absolute;bottom:4px;left:0;right:0;text-align:center;font:9px Arial
 .settings-panel .primary{margin-top:14px;width:100%}
 .welcome-overlay{background:radial-gradient(ellipse at 50% 42%,#ffc96412,transparent 55%),#03090dc9;backdrop-filter:blur(2px)}
 .welcome-panel{text-align:center;background:radial-gradient(ellipse at 50% -12%,#ffc9641c,transparent 55%),repeating-linear-gradient(2deg,#c7a66005 0 1px,transparent 1px 5px),linear-gradient(145deg,#29291f,#0e1513);border:1px solid #8c7040;border-radius:18px;box-shadow:inset 0 0 0 3px #070c0b,inset 0 0 0 4px #5c4b2b77,0 8px 0 #173d4866,0 18px 60px #08293355}
-.welcome-pick{display:block;font-size:36px;color:#c99d4c;filter:drop-shadow(0 2px 5px #000c)}
+.welcome-claw{display:block;height:80px;transform-origin:50% 0;animation:claw-swing 2.6s ease-in-out infinite;filter:drop-shadow(0 2px 5px #000c)}
+.welcome-claw i{display:block;width:3px;height:42px;margin:0 auto;border-radius:2px;background:repeating-linear-gradient(0deg,#6b6659 0 3px,#26231e 3px 5px)}
+.welcome-claw svg{display:block;margin:-1px auto 0;fill:none;stroke:#c9a24c;stroke-width:3.6;stroke-linecap:round}
+.welcome-claw ellipse{fill:#2b271f;stroke:#6b6555;stroke-width:2}
+@keyframes claw-swing{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(14deg)}}
+.btn-icon{margin-right:8px;opacity:.9}
 .welcome-tag{display:block;margin-top:4px;font-size:10px;font-weight:700;letter-spacing:2.4px;text-transform:uppercase;color:#bd9858}
 .welcome-title{font:700 36px Georgia,serif;margin:6px 0 2px;
   background:linear-gradient(100deg,#8a6a2f,#ffc964 30%,#fff3d0 50%,#ffc964 70%,#8a6a2f);background-size:200% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;animation:sheen 5s linear infinite}
 .welcome-tagline{margin:0 0 14px;font-size:11px;color:#b2ad96}
 .welcome-panel button{display:block}
+.welcome-panel{animation:settle .45s cubic-bezier(.2,.9,.3,1.15)}
+@keyframes settle{from{opacity:0;transform:translateY(16px) scale(.96)}}
+.welcome-overlay::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+   radial-gradient(1.6px 1.6px at 18% 28%,#ffdca4b0,transparent 60%),
+   radial-gradient(2.2px 2.2px at 72% 22%,#ffdca490,transparent 60%),
+   radial-gradient(1.4px 1.4px at 84% 62%,#ffdca470,transparent 60%),
+   radial-gradient(1.8px 1.8px at 30% 72%,#ffdca460,transparent 60%),
+   radial-gradient(1.5px 1.5px at 58% 82%,#ffdca480,transparent 60%),
+   radial-gradient(1.3px 1.3px at 44% 14%,#ffdca470,transparent 60%);
+  animation:motes 9s ease-in-out infinite alternate}
+@keyframes motes{to{transform:translate(6px,-14px)}}
+@media (prefers-reduced-motion:reduce){.welcome-panel,.welcome-claw,.welcome-overlay::after,.welcome-title{animation:none}}
 .welcome-panel .primary{box-shadow:0 3px 0 #b78638,0 10px 26px #ffc9642e}
 .secondary{margin-top:10px;width:100%;border-radius:10px;padding:13px 22px;border:1px solid #4d463a;background:linear-gradient(160deg,var(--metal-1),var(--metal-2));color:var(--gold);font-weight:700;font-size:14px;box-shadow:inset 0 1px 0 #5c5445,0 4px 12px #000a}
 .secondary:not(:disabled):hover{background:#3a352c}
