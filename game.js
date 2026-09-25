@@ -41,34 +41,51 @@
     ['Stardust Sanctuary', 13800, 95], ['The Boundless Bonanza', 13950, 96], ['Fortune’s Final Frontier', 14100, 97],
     ['The Hundredth Door', 14250, 98], ['Heart of a Hundred Mines', 14400, 99]
   ];
+  // Recovery → build → build → challenge → finale, with diminishing growth.
+  const targetRhythm = [.94, .98, 1.02, 1.06, 1.12];
+  const difficultyRhythm = [-.025, -.0125, 0, .0125, .025];
+  levels.forEach((entry, index) => {
+    const baseline = 550 + 4200 * (1 - Math.exp(-index / 35));
+    entry[1] = Math.round(baseline * targetRhythm[index % 5] / 25) * 25;
+  });
   const types = {
-    small: { radius: 17, value: 175, weight: 1, color: '#eabc52' },
-    gold: { radius: 29, value: 450, weight: 2, color: '#edbc50' },
-    large: { radius: 43, value: 950, weight: 3.6, color: '#f2c45e' },
-    rock: { radius: 34, value: 15, weight: 5.5, color: '#6e7166' },
-    diamond: { radius: 16, value: 650, weight: .8, color: '#b3efeb' },
-    gem: { radius: 19, value: 325, weight: .9, color: '#95bdaa' },
-    bag: { radius: 22, value: 0, weight: 1, color: '#c8a071' },
+    small: { radius: 17, value: 200, weight: .9, color: '#eabc52' },
+    gold: { radius: 29, value: 475, weight: 1.8, color: '#edbc50' },
+    large: { radius: 43, value: 1000, weight: 3.2, color: '#f2c45e' },
+    rock: { radius: 34, value: 75, weight: 2.2, color: '#6e7166' },
+    diamond: { radius: 16, value: 550, weight: 1, color: '#b3efeb' },
+    gem: { radius: 19, value: 300, weight: .95, color: '#95bdaa' },
+    bag: { radius: 22, value: 350, weight: 1.05, color: '#c8a071' },
     tnt: { radius: 25, value: 0, weight: 1, color: '#ba4938' },
-    pig: { radius: 26, value: 10, weight: .7, speed: 65, color: '#a0846a' },
-    diamondPig: { radius: 32, value: 660, weight: .8, speed: 150, color: '#9d7968' }
+    pig: { radius: 26, value: 25, weight: .6, speed: 65, color: '#a0846a' },
+    diamondPig: { radius: 32, value: 575, weight: 1.1, speed: 150, color: '#9d7968' }
   };
-  const blastRadius = 120, diamondBonus = 1.5, dynamiteCapacity = 3;
+  // Fixed treasure budgets avoid unwinnable low-value random rolls.
+  const spawnCounts = [
+    { small: 3, gold: 3, large: 2, diamond: 1, gem: 2, bag: 1, rock: 2 }, // 1–10
+    { small: 3, gold: 4, large: 3, diamond: 2, gem: 2, bag: 1, rock: 3 }, // 11–40
+    { small: 2, gold: 4, large: 3, diamond: 3, gem: 3, bag: 1, rock: 3 }  // 41–100
+  ];
+  const blastRadius = 120, diamondBonus = 1.5, strengthBonus = 1.5, dynamiteCapacity = 3;
+  let mapVersion = 2;
   let level = 0, bank = 0, haul = 0, time = 60, phase = 'ready', objects = [];
   let angle = 0, swing = 0, length = 23, hookState = 'swing', caught = null;
   let dynamite = 0, strength = false, book = false, sound = false, audio;
   let magnet = false, magnetArmed = false, revealUntil = 0, reelSpeed = 0;
   let lastFrame = 0, deadline = 0, toastUntil = 0, particles = [], popups = [], shakeMag = 0, shakeTime = 0;
   const money = n => '$' + n.toLocaleString('en-US');
-  let db, saveQueue = Promise.resolve(), lastSave = 0;
+  // New games and Continue must share storage from the first save onward.
+  const db = new Dexie('GoldMining');
+  db.version(1).stores({ saves: 'id' });
+  let saveQueue = Promise.resolve(), lastSave = 0;
   function storageError(error) {
     console.warn('Gold Mining save unavailable:', error);
     notify('Progress could not be saved. Keep this tab open.');
   }
   function saveProgress() {
-    if (!db || phase === 'ready') return;
+    if (phase === 'ready') return;
     const snapshot = {
-      id: 'expedition', version: 1, level, bank, haul,
+      id: 'expedition', version: 1, mapVersion, level, bank, haul,
       time: phase === 'playing' ? Math.max(0, (deadline - performance.now()) / 1000) : time,
       phase: phase === 'playing' ? 'paused' : phase,
       angle, swing, length, hookState, caughtId: caught?.id ?? null,
@@ -81,7 +98,8 @@
   }
   function validSave(s) {
     if (!s || s.version !== 1 || !Number.isInteger(s.level) || s.level < 0 || s.level >= levels.length) return false;
-    const map = makeMap(s.level);
+    if (s.mapVersion !== undefined && ![1, 2].includes(s.mapVersion)) return false;
+    const map = makeMap(s.level, s.mapVersion ?? 1);
     return ['paused', 'shop', 'lost', 'won'].includes(s.phase)
       && (s.phase !== 'shop' || s.level < levels.length - 1)
       && (s.phase !== 'won' || s.level === levels.length - 1 || [9, 29, 49].includes(s.level))
@@ -97,14 +115,15 @@
   }
   async function loadProgress() {
     try {
-      db = new Dexie('GoldMining');
-      db.version(1).stores({ saves: 'id' });
+      await saveQueue;
       const s = await db.saves.get('expedition');
       if (!s) return false;
       if (!validSave(s)) throw new Error('Invalid or unsupported save data');
       ({ level, bank, haul, time, angle, swing, length, hookState, dynamite, strength, book, sound } = s);
+      mapVersion = s.mapVersion ?? 1;
       magnet = s.magnet ?? false; magnetArmed = s.magnetArmed ?? false;
       objects = makeMap(level);
+      paintBackground(level);
       movePigs();
       objects.forEach(o => { o.taken = s.taken.includes(o.id); });
       caught = s.caughtId === null ? null : objects[s.caughtId];
@@ -116,24 +135,32 @@
       updateSound(); updateHUD();
       return true;
     } catch (error) {
-      db = null;
-      storageError(error);
+      console.warn('Gold Mining save could not be loaded:', error);
+      notify('Could not continue this expedition. Try again or start a new game.');
       return false;
     }
   }
   function random(seed) {
     return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   }
-  function makeMap(index) {
+  function makeMap(index, layoutVersion = mapVersion) {
     const rand = random(1849 + index * 719);
-    // Keep placement and IDs stable; value tuning must not consume extra random numbers.
-    const density = Math.min(index, 9);
-    const kinds = ['large', 'large', 'gold', 'gold', 'small', 'small', 'diamond', 'gem', 'bag', 'rock', 'rock'];
-    for (let i = 0; i < density; i++) kinds.push(i % 2 ? 'large' : 'diamond');
-    for (let i = 0; i < Math.floor(density / 2); i++) kinds.push('rock');
+    const kinds = [];
+    if (layoutVersion === 1) {
+      // Legacy expeditions retain positions, IDs and random draw order.
+      const density = Math.min(index, 9);
+      kinds.push('large', 'large', 'gold', 'gold', 'small', 'small', 'diamond', 'gem', 'bag', 'rock', 'rock');
+      for (let i = 0; i < density; i++) kinds.push(i % 2 ? 'large' : 'diamond');
+      for (let i = 0; i < Math.floor(density / 2); i++) kinds.push('rock');
+    } else {
+      const counts = { ...spawnCounts[index < 10 ? 0 : index < 40 ? 1 : 2] };
+      // Alternate gold-heavy and gem-heavy mines without adding hazards.
+      if (index % 2) { counts.large--; counts.gem += 2; }
+      for (const [type, count] of Object.entries(counts)) kinds.push(...Array(count).fill(type));
+    }
     const map = kinds.map((type, id) => {
       const spec = types[type];
-      return { type, id, ...spec, x: 0, y: 0, taken: false, rotation: rand() * .6 - .3, value: type === 'bag' ? 100 + Math.floor(rand() * 7) * 100 : spec.value };
+      return { type, id, ...spec, x: 0, y: 0, taken: false, rotation: rand() * .6 - .3, value: type === 'bag' ? spec.value - 150 + Math.floor(rand() * 7) * 50 : spec.value };
     }).reduce((placed, obj) => {
       for (let attempt = 0; attempt < 500; attempt++) {
         obj.x = 85 + rand() * 930;
@@ -142,29 +169,40 @@
       }
       placed.push(obj); return placed;
     }, []);
-    // Require 26%, 36%, 46%, then 52% of stationary treasure at mines 1, 15, 50, 100.
-    // Pigs remain optional upside; the budget leaves room for missed catches and upgrades.
-    const targetShare = .26 + .10 * Math.min(index / 14, 1)
-      + .10 * Math.max(0, Math.min((index - 14) / 35, 1))
-      + .06 * Math.max(0, Math.min((index - 49) / 50, 1));
+    // Require 45–50% at mines 1–10, 52–60% at 11–40, and 60–68% at 41–100.
+    // Each band ramps gradually while preserving five-mine challenge/recovery cycles.
+    const baseShare = index < 10 ? .475
+      : index < 40 ? .545 + .03 * (index - 10) / 29
+      : .625 + .03 * (index - 40) / 59;
+    const targetShare = baseShare + difficultyRhythm[index % 5];
     const treasure = map.filter(obj => obj.type !== 'rock');
     const richness = levels[index][1] / (targetShare * treasure.reduce((sum, obj) => sum + obj.value, 0));
     treasure.forEach(obj => { obj.value = Math.round(obj.value * richness); });
-    // Append hazards after placing treasure so existing saves retain their object IDs and positions.
-    const count = Math.min(6, 1 + Math.floor(index / 4));
-    const hazards = Array(count).fill('tnt');
-    // Patrol counts are rolled per level, so no two mines load the same guard detail.
-    const pigTier = Math.min(3, 1 + Math.floor(index / 5));
-    hazards.push(...Array(Math.floor(rand() * (pigTier + 1))).fill('pig'));
-    const diamondTier = index < 9 ? 0 : index >= 19 ? 2 : 1;
-    hazards.push(...Array(Math.floor(rand() * (diamondTier + 1))).fill('diamondPig'));
+    const hazards = [];
+    if (layoutVersion === 1) {
+      const count = Math.min(6, 1 + Math.floor(index / 4));
+      hazards.push(...Array(count).fill('tnt'));
+      const pigTier = Math.min(3, 1 + Math.floor(index / 5));
+      hazards.push(...Array(Math.floor(rand() * (pigTier + 1))).fill('pig'));
+      const diamondTier = index < 9 ? 0 : index >= 19 ? 2 : 1;
+      hazards.push(...Array(Math.floor(rand() * (diamondTier + 1))).fill('diamondPig'));
+    } else {
+      // Introduce TNT at mine 6; two only on mid/late finales.
+      if (index >= 5) hazards.push('tnt');
+      if (index >= 10 && index % 5 === 4) hazards.push('tnt');
+      if (index >= 10) hazards.push('pig', 'diamondPig');
+    }
     for (const type of hazards) {
       const obj = { type, id: map.length, ...types[type], taken: false, rotation: rand() * .6 - .3 };
-      if (type === 'diamondPig') obj.value = 10 + Math.round(types.diamond.value * richness);
+      if (type === 'diamondPig') obj.value = types.pig.value + Math.round((types.diamondPig.value - types.pig.value) * richness);
       for (let attempt = 0; attempt < 500; attempt++) {
         obj.x = 85 + rand() * 930;
         obj.y = obj.speed ? 205 + rand() * (H - 245 - obj.radius) : 220 + rand() * 275;
-        if (map.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + (obj.speed ? 4 : 18))) {
+        // New TNT cannot chain-react or destroy stationary treasure from its spawn.
+        const safeBlast = layoutVersion === 1 || type !== 'tnt' || map.every(other =>
+          Math.hypot(obj.x - other.x, obj.y - other.y) >
+          (other.type === 'tnt' ? 2 * blastRadius : blastRadius + other.radius));
+        if (safeBlast && map.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + (obj.speed ? 4 : 18))) {
           if (obj.speed) { obj.startX = obj.x; obj.direction = 1; obj.rotation = 0; }
           map.push(obj); break;
         }
@@ -307,7 +345,7 @@
       $('retry').onclick = startLevel;
     } else {
       showDialog(`<span class="badge">${levels.length} SHAFTS. ONE LEGEND.</span><h2>What a haul!</h2><p>You worked all ${levels.length} mines and still carry ${money(bank)}.<br>The whole crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
-      $('restart').onclick = () => { level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
+      $('restart').onclick = () => { mapVersion = 2; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
     }
   }
   function supplyPrices(index) {
@@ -315,14 +353,14 @@
     // Scale sinks with the upcoming mine, rounded to readable $25 price steps.
     return {
       dynamite: Math.max(100, Math.ceil(goal * .035 / 25) * 25),
-      strength: Math.max(200, Math.ceil(goal * .12 / 25) * 25),
-      book: Math.max(300, Math.ceil(goal * .18 / 25) * 25),
-      magnet: Math.max(150, Math.ceil(goal * .07 / 25) * 25)
+      strength: Math.max(100, Math.ceil(goal * .08 / 25) * 25),
+      book: Math.max(150, Math.ceil(goal * .10 / 25) * 25),
+      magnet: Math.max(50, Math.ceil(goal * .03 / 25) * 25)
     };
   }
   function renderShop() {
     const prices = supplyPrices(level + 1);
-    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p>Target met. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Target ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon icon-dynamite" aria-hidden="true"></span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon icon-potion" aria-hidden="true"></span><strong>Strength drink</strong><small>2× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon icon-book" aria-hidden="true"></span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
+    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p>Target met. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Target ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon icon-dynamite" aria-hidden="true"></span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon icon-potion" aria-hidden="true"></span><strong>Strength drink</strong><small>${strengthBonus}× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon icon-book" aria-hidden="true"></span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
     $('dialog').querySelector('.shop-items').insertAdjacentHTML('beforeend', `<button class="shop-item" id="buy-magnet" ${bank < prices.magnet || magnet ? 'disabled' : ''}><span class="item-icon icon-magnet" aria-hidden="true"></span><strong>Magnetic claw</strong><small>Wider gold capture<br>One launch · arm in the field</small><span>${magnet ? 'Packed ✓' : money(prices.magnet)}</span></button>`);
     $('buy-magnet').onclick = () => buy('magnet');
     $('buy-dynamite').onclick = () => buy('dynamite');
@@ -430,7 +468,7 @@
       }
       else if (p.x < 20 || p.x > W - 20 || p.y > H - 30) hookState = 'back';
     } else {
-      const targetSpeed = 360 * (strength ? 2 : 1) / (caught ? caught.weight : .65);
+      const targetSpeed = 360 * (strength ? strengthBonus : 1) / (caught ? caught.weight : .65);
       // Loaded reels take time to overcome inertia, while an empty claw snaps home.
       reelSpeed += (targetSpeed - reelSpeed) * (1 - Math.exp(-dt * (caught ? 4 : 12)));
       length -= reelSpeed * dt;
@@ -438,7 +476,7 @@
         length = 23; hookState = 'swing'; magnetArmed = false;
         if (caught) {
           const value = caught.type === 'diamondPig'
-            ? 10 + Math.round((caught.value - 10) * (book ? diamondBonus : 1))
+            ? types.pig.value + Math.round((caught.value - types.pig.value) * (book ? diamondBonus : 1))
             : Math.round(caught.value * (caught.type === 'diamond' && book ? diamondBonus : 1));
           haul += value;
           popups.push({ text: '+' + money(value), x: 700, y: 74, life: 1.6 });
@@ -970,7 +1008,7 @@
   for (const button of document.querySelectorAll('.action-item')) {
     button.addEventListener('pointerdown', event => { if (!button.disabled) burst(canvasPoint(event), 'gold'); });
   }
-  $('strength-item').onclick = () => notify('Strength active: double pulling speed for this mine.');
+  $('strength-item').onclick = () => notify(`Strength active: ${strengthBonus}× pulling speed for this mine.`);
   $('book-item').onclick = () => { if (phase === 'playing' && book) { revealUntil = performance.now() + 6000; tone(920); } };
   $('magnet-item').onclick = () => {
     if (phase !== 'playing' || !magnet || hookState !== 'swing') return;
@@ -993,30 +1031,45 @@
   paintBackground();objects=makeMap(0);updateHUD();
   const welcome = $('welcome-overlay');
   function showWelcome() { welcome.hidden = false; welcome.querySelector('button:not(:disabled)')?.focus(); }
-  // Probe storage so Continue only lights up when an expedition actually exists.
-  const probe = new Dexie('GoldMining');
-  probe.version(1).stores({ saves: 'id' });
-  probe.saves.get('expedition')
-    .then(save => { $('welcome-continue').disabled = !save; })
-    .catch(() => { $('welcome-continue').disabled = true; });
+  // Probe storage so Continue only lights up for a usable expedition.
+  db.saves.get('expedition')
+    .then(save => {
+      const available = validSave(save);
+      $('welcome-continue').disabled = !available;
+      $('welcome-continue').title = available ? 'Resume your saved expedition' : 'Start a new game to save an expedition';
+    })
+    .catch(() => {
+      $('welcome-continue').disabled = true;
+      $('welcome-continue').title = 'Saved progress is unavailable in this browser';
+    });
   $('welcome-new').onclick = () => {
     welcome.hidden = true;
-    level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false;
+    mapVersion = 2; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false;
     startLevel();
   };
   $('welcome-continue').onclick = async () => {
-    welcome.hidden = true;
-    if (!await loadProgress()) showWelcome();   // invalid save: fall back to the menu
+    if ($('welcome-continue').disabled) return;
+    $('welcome-continue').disabled = true;
+    $('welcome-new').disabled = true;
+    $('welcome-continue').setAttribute('aria-busy', 'true');
+    const loaded = await loadProgress();
+    $('welcome-continue').removeAttribute('aria-busy');
+    $('welcome-new').disabled = false;
+    $('welcome-continue').disabled = false;
+    welcome.hidden = loaded;
+    if (loaded) $('dialog').querySelector('button')?.focus();
+    else showWelcome();
   };
   $('welcome-guide').onclick = () => {
     welcome.hidden = true;
     showDialog(`<span class="badge">MINER’S HANDBOOK</span><h2>How to dig</h2>
       <p><strong>Controls.</strong> ↓ / Space or tap the field to drop the claw. D fires dynamite. P or Esc pauses.</p>
       <p><strong>Mines.</strong> Reach the target within 60 seconds; leftover gold carries to the next shaft. Miss the target and you dig the same mine again.</p>
+      <p><strong>Pacing.</strong> Every fifth mine is a challenge, followed by a breather. Gold-rich and gem-rich layouts alternate. Rocks pay a little, but treasure is worth your time.</p>
       <p><strong>Supplies shop.</strong> Between mines you spend surplus gold on gear. Prices rise with the next mine’s target:</p>
       <ul class="guide-items">
         <li><strong>Dynamite</strong> — destroys your current catch</li>
-        <li><strong>Strength drink</strong> — 2× pulling speed for the next mine</li>
+        <li><strong>Strength drink</strong> — ${strengthBonus}× pulling speed for the next mine</li>
         <li><strong>Diamond book</strong> — 1.5× diamond value for the next mine</li>
         <li><strong>Magnetic claw</strong> — wider gold capture; arm it before your next launch</li>
       </ul>
