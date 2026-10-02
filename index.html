@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0d0b09">
   <title>Gold Mining | Deep Shaft No. 7</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 20 9 9l9-4 9 7-2 11-11 4z' fill='%23e8a52c' stroke='%235c3a0a' stroke-width='2'/%3E%3Cpath d='M9 9l9-4 1 8-8 3z' fill='%23ffe9a0'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <script src="vendor/dexie.min.js" defer></script>
   <script src="cavern-art.js" defer></script>
+  <script src="classic-art.js" defer></script>
   <script src="game.js" defer></script>
 </head>
 <body>
@@ -47,6 +49,12 @@
           <label class="setting-row"><span>Sound effects</span><input type="checkbox" id="sound-toggle" role="switch"></label>
           <label class="setting-row"><span>Music</span><input type="checkbox" id="music-toggle" role="switch"></label>
           <label class="setting-row"><span>Shake &amp; vibration</span><input type="range" id="shake-range" min="0" max="100" step="10" value="100"></label>
+          <div class="setting-row setting-art"><span>Art style</span>
+            <div class="art-choice" role="radiogroup" aria-label="Art style">
+              <label><input type="radio" name="art" value="cavern" id="art-cavern"><span>Cavern<span class="art-sub">Lantern-lit rock</span></span></label>
+              <label><input type="radio" name="art" value="classic" id="art-classic"><span>Classic<span class="art-sub">Daylight cartoon</span></span></label>
+            </div>
+          </div>
           <button id="settings-close" class="primary">Back to the shaft</button>
         </div></div>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>

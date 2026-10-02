@@ -1,6 +1,9 @@
 'use strict';
-// Static geology is rasterized once per level. No image assets or per-frame noise.
+// Static geology is rasterized once per level. No image assets or per-frame noise;
+// drawAmbient animates only a few cheap accents (water drips, crystal glints).
 window.CavernArt = (() => {
+  const bannerTint = '4,8,10';   // title cards sit on a band of cave shadow
+  let drips = [], sparkles = [];   // live accents, positioned by the last painted board
   function random(seed) {
     return () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
   }
@@ -15,18 +18,20 @@ window.CavernArt = (() => {
     stops.forEach(([at, color]) => g.addColorStop(at, color));
     c.fillStyle = g; c.fillRect(-1, -1, 2, 2); c.restore();
   }
-  function paintBackground(canvas, seed, lamp) {
-    const c = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
+  // The caller maps the 1100×580 field onto the canvas; view.top/bottom are the
+  // extra rows visible on tall screens, so rock must reach past 0..h.
+  function paintBackground(canvas, seed, lamp, view = { top: 0, bottom: 580 }) {
+    const c = canvas.getContext('2d'), w = 1100, h = 580, { top, bottom } = view;
     const rand = random(90210 + seed * 173);
-    c.fillStyle = '#070b0e'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#070b0e'; c.fillRect(0, top, w, bottom - top);
     // The black ceiling opens into a deep, amber-filled ravine, not a flat dirt wall.
-    shape(c, [[120,190],[200,140],[300,180],[425,100],[600,65],[770,112],[950,35],[w,h],[0,h]], '#101311');
+    shape(c, [[120,190],[200,140],[300,180],[425,100],[600,65],[770,112],[950,35],[w,bottom],[0,bottom]], '#101311');
     for (let layer = 0; layer < 4; layer++) {
-      const points = [[0,h]];
+      const points = [[0,bottom]];
       for (let x = 0; x <= w; x += 30) {
         points.push([x, 190 + layer * 63 + Math.sin(x * .006 + layer) * 52 + Math.sin(x * .019 + layer * 2) * 19]);
       }
-      points.push([w,h]);
+      points.push([w,bottom]);
       const g = c.createLinearGradient(0, 160 + layer * 65, 0, h);
       g.addColorStop(0, ['#171b18','#201f16','#302615','#493018'][layer]); g.addColorStop(1, '#141410');
       shape(c, points, g);
@@ -44,12 +49,13 @@ window.CavernArt = (() => {
     // repeated diagonal stripe pattern at full-screen scale.
     const left = [[0,0],[111,0],[139,35],[145,75],[190,111],[179,137],[139,160],[123,202],[132,250],[159,291],[147,335],[172,396],[207,448],[230,489],[154,535],[0,580]];
     const right = [[w,0],[930,0],[915,65],[874,101],[850,145],[789,180],[805,217],[779,257],[796,298],[767,333],[758,376],[728,414],[722,455],[666,499],[627,550],[w,h]];
-    cliff(left, false); cliff(right, true);
+    const reach = ([x, y]) => [x, y === 0 ? top : y === h ? bottom : y];
+    cliff(left.map(reach), false); cliff(right.map(reach), true);
     function cliff(outline, rightSide) {
       c.save(); shape(c, outline, '#302414'); c.clip();
       const g = c.createLinearGradient(rightSide ? w : 0, 0, rightSide ? 700 : 210, 0);
       g.addColorStop(0, '#080c0c'); g.addColorStop(.45, '#2b1e12'); g.addColorStop(.8, '#82521c'); g.addColorStop(1, '#d49332');
-      c.fillStyle = g; c.fillRect(0,0,w,h);
+      c.fillStyle = g; c.fillRect(0,top,w,bottom-top);
       // Unequal beds split into broad angular blocks, with black undercuts.
       for (let row = -8; row < 43; row++) {
         const y = row*19 + rand()*12, points=[];
@@ -66,7 +72,7 @@ window.CavernArt = (() => {
       }
       // Broken faces receive the lantern on their inward edges, not everywhere.
       for(let i=0;i<95;i++) {
-        const x=rightSide?760+rand()*340:rand()*190,y=rand()*h;
+        const x=rightSide?760+rand()*340:rand()*190,y=top+rand()*(bottom-top);
         const rw=18+rand()*70,rh=12+rand()*50;
         const face=c.createLinearGradient(x,y,x+rw,y+rh);
         face.addColorStop(0,'#edac4438');face.addColorStop(.3,'#8b592018');face.addColorStop(1,'#02070988');
@@ -74,7 +80,7 @@ window.CavernArt = (() => {
       }
       // Broad vertical fractures break bedding into solid, weighty rock faces.
       for (let i=0;i<24;i++) {
-        let x=rightSide?760+rand()*340:rand()*190, y=rand()*h;
+        let x=rightSide?760+rand()*340:rand()*190, y=top+rand()*(bottom-top);
         c.beginPath(); c.moveTo(x,y);
         for(let j=0;j<7;j++){x+=(rand()-.48)*17;y+=7+rand()*17;c.lineTo(x,y);}
         c.strokeStyle='#080b09aa';c.lineWidth=1+rand()*3;c.stroke();
@@ -82,7 +88,7 @@ window.CavernArt = (() => {
       }
       // Embedded pyrite follows short fractures, never competing with treasure.
       for(let i=0;i<150;i++) {
-        const x=rightSide?775+rand()*285:rand()*185,y=rand()*h;
+        const x=rightSide?775+rand()*285:rand()*185,y=top+rand()*(bottom-top);
         const band=Math.sin(x*.022+y*.033);
         if(band>.88){c.fillStyle=rand()>.75?'#ddb25299':'#a879343f';c.fillRect(x,y,1+rand()*3,.5+rand());}
       }
@@ -103,20 +109,20 @@ window.CavernArt = (() => {
     }
     glow(c, 833, 121, 95, 72, [[0,'#e3a13c48'],[.45,'#b8792420'],[1,'#b8792400']]);
     // Narrow path on the cavern floor and damp, gold-lit sediment.
-    shape(c, [[0,h],[215,511],[340,491],[435,501],[600,532],[w,h]], '#342715');
+    shape(c, [[0,bottom],[215,511],[340,491],[435,501],[600,532],[w,bottom]], '#342715');
     glow(c, 337, 521, 285, 39, [[0,'#fff1aaff'],[.12,'#ffbd36ee'],[.45,'#ce8b2f55'],[1,'#5b441600']]);
     for (let i=0;i<210;i++) {
-      const y = 510+rand()*70, x = rand()*w;
+      const y = 510+rand()*(bottom-510), x = rand()*w;
       c.fillStyle = rand()>.6 ? '#c4a05240' : '#03090980'; c.fillRect(x,y,2+rand()*19,.4+rand()*1.4);
     }
     // Fine sandstone pits with directional highlights, baked into the geology.
     for(let i=0;i<23000;i++) {
-      const x=rand()*w,y=rand()*h,r=.2+rand()*1.3;
+      const x=rand()*w,y=top+rand()*(bottom-top),r=.2+rand()*1.3;
       c.fillStyle=rand()>.55?'#e3ad4809':'#02070922';
       c.fillRect(x,y,r*2,r);
     }
     // Film-like stone grain stays subtle enough to preserve the large silhouettes.
-    const image = c.getImageData(0,0,w,h);
+    const image = c.getImageData(0,0,canvas.width,canvas.height);
     for (let i=0;i<image.data.length;i+=4) {
       const n = (rand()-.5)*5;
       image.data[i] += n; image.data[i+1] += n*.8; image.data[i+2] += n*.5;
@@ -136,12 +142,66 @@ window.CavernArt = (() => {
     c.fillStyle = '#0a0e0d'; c.fillRect(396,144,400,5);
     c.strokeStyle = '#826739'; c.lineWidth = 2;
     for (const y of [129,137]) { c.beginPath(); c.moveTo(396,y); c.lineTo(800,y); c.stroke(); }
+    // Stalactites hang from the top of the screen into the ceiling darkness.
+    const drip = random(4021 + seed * 59);   // own stream: grain above consumes rand() per pixel
+    drips = [];
+    for (let x = 140 + drip() * 30; x < 960; x += 26 + drip() * 46) {
+      if (x > 380 && x < 820 && drip() > .35) continue;   // keep the catwalk cables readable
+      const len = 14 + drip() * (x > 380 && x < 820 ? 26 : 70), half = 5 + drip() * 9;
+      const root = top - 4, tip = len, lean = (drip() - .5) * 8;
+      // Stone faces the lantern: warm on the near side, black on the far side.
+      const face = c.createLinearGradient(x - half, 0, x + half, 0), lit = x < lamp.x;
+      face.addColorStop(0, lit ? '#0a0c0b' : '#4a361d'); face.addColorStop(.6, '#1d1710'); face.addColorStop(1, lit ? '#4a361d' : '#0a0c0b');
+      shape(c, [[x - half, root], [x + half, root], [x + half * .35, tip - len * .35], [x + lean, tip], [x - half * .4, tip - len * .4]], face, '#02050699', 1);
+      c.fillStyle = '#d29a4655'; c.fillRect(x + lean - .8, tip - 2, 1.6, 2);   // wet tip catches the light
+      drips.push({ x: x + lean, y: tip, floor: 480 + drip() * 70, period: 2.6 + drip() * 5, phase: drip() * 9 });
+    }
+    // Quartz glints on the outer cliff faces, clear of the treasure field.
+    const glint = random(733 + seed * 41);
+    sparkles = Array.from({ length: 26 }, () => {
+      const right = glint() > .5;
+      return { x: right ? 945 + glint() * 145 : 8 + glint() * 105, y: 150 + glint() * 400, size: 2.5 + glint() * 3.5, rate: .5 + glint() * .9, phase: glint() * 30 };
+    });
     // Foreground rubble frames the floor without covering collectible hit targets.
     for (let i=0;i<20;i++) {
-      const x=rand()*w, y=564+rand()*24, r=10+rand()*48;
+      const x=rand()*w, y=564+rand()*(bottom-556), r=10+rand()*48;
       shape(c, [[x-r,y+10],[x-r*.7,y-r*.2],[x-r*.1,y-r*.48],[x+r*.65,y-r*.12],[x+r,y+15]], '#0b100f', '#514a2b55');
     }
     glow(c, lamp.x, lamp.y+30, 240, 165, [[0,'#b477271f'],[1,'#b4772700']]);
+  }
+  // Drops swell on each stalactite tip, fall through the lantern light and splash.
+  // Everything derives from the clock, so there is no per-drop state to update.
+  function drawAmbient(ctx, now, env) {
+    const t = now / 1000, gravity = 900;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+    for (const s of sparkles) {
+      const a = Math.pow(Math.max(0, Math.sin(t * s.rate + s.phase)), 14);
+      if (a < .03) continue;
+      const r = s.size * (.5 + a * .7);
+      ctx.globalAlpha = a; ctx.strokeStyle = '#ffe2a0'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(s.x - r, s.y); ctx.lineTo(s.x + r, s.y);
+      ctx.moveTo(s.x, s.y - r * env.aspect); ctx.lineTo(s.x, s.y + r * env.aspect); ctx.stroke();
+      ctx.fillStyle = '#fff6d6'; ctx.fillRect(s.x - .8, s.y - .8, 1.6, 1.6);
+    }
+    for (const d of drips) {
+      const fall = Math.sqrt(2 * (d.floor - d.y) / gravity), local = (t + d.phase) % d.period;
+      ctx.strokeStyle = ctx.fillStyle = '#ffd99a';
+      if (local < fall) {
+        const y = d.y + gravity / 2 * local * local, len = Math.min(14, 2 + gravity * local * .016);
+        ctx.globalAlpha = .55; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(d.x, y - len); ctx.lineTo(d.x, y); ctx.stroke();
+      } else if (local < fall + .45) {
+        const k = (local - fall) / .45;
+        ctx.globalAlpha = (1 - k) * .5; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(d.x, d.floor, 3 + k * 14, (1 + k * 3) * env.aspect, 0, 0, Math.PI * 2); ctx.stroke();
+        for (const side of [-1, 1]) ctx.fillRect(d.x + side * k * 10 - .7, d.floor - Math.sin(k * Math.PI) * 9 * env.aspect - .7, 1.4, 1.4);
+      } else if (local > d.period - .6) {
+        const k = (local - d.period + .6) / .6;
+        ctx.globalAlpha = .3 + k * .4;
+        ctx.beginPath(); ctx.ellipse(d.x, d.y + k * 1.5, .8 + k * 1.2, (.8 + k * 1.6) * env.aspect, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
   }
   function paintLight(canvas, lamp) {
     const c = canvas.getContext('2d'), w=canvas.width, h=canvas.height;
@@ -185,5 +245,5 @@ window.CavernArt = (() => {
     }
     surfaces.set(key,canvas); return canvas;
   }
-  return { paintBackground, paintLight, surface };
+  return { paintBackground, paintLight, drawAmbient, surface, bannerTint };
 })();

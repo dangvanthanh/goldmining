@@ -3,8 +3,34 @@
   const $ = id => document.getElementById(id);
   const canvas = $('mine'), ctx = canvas.getContext('2d');
   const W = 1100, H = 580, origin = { x: 550, y: 132 };
-  let objectAspect = 1;
-  new ResizeObserver(([entry]) => { const { width, height } = entry.contentRect; objectAspect = matchMedia('(max-aspect-ratio: 3/4)').matches ? Math.min(1, width * H / (height * W)) : 1; CavernArt.paintLight(cone, { x: LAMP.x, y: origin.y + (LAMP.y - origin.y) * objectAspect }); }).observe(canvas);
+  // Art providers are interchangeable: paintBackground / paintLight / surface.
+  const ART_PROVIDERS = { cavern: 'CavernArt', classic: 'ClassicArt' };
+  let artName = 'cavern';
+  try { const stored = localStorage.getItem('gm-art'); if (ART_PROVIDERS[stored]) artName = stored; } catch {}
+  let art = window[ART_PROVIDERS[artName]];
+  document.documentElement.dataset.art = artName;
+  // The canvas always fills the viewport: the W×H field is stretched to the screen
+  // (fit.sx/sy are device pixels per field unit) and sprites undo the stretch through
+  // objectAspect, so treasure stays round and nothing is cropped or letterboxed.
+  let objectAspect = 1, fit = { sx: 1, sy: 1, oy: 0 }, repaintTimer = 0, resized = false;
+  const PORTRAIT = matchMedia('(max-aspect-ratio: 3/4)');
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    // Cap the backing store near 4 MP so full-screen frames stay cheap.
+    const dpr = Math.min(devicePixelRatio || 1, 2, Math.sqrt(4e6 / (rect.width * rect.height)));
+    canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+    // Tall phones keep the field between the score plaque and the tool bar; the art fills the rest.
+    const top = PORTRAIT.matches ? document.querySelector('.plaque').getBoundingClientRect().bottom - rect.top + 10 : 0;
+    const bottom = PORTRAIT.matches ? rect.bottom - document.querySelector('.hud-hint').getBoundingClientRect().top + 6 : 0;
+    fit = { sx: canvas.width / W, sy: (rect.height - top - bottom) * dpr / H, oy: top * dpr };
+    objectAspect = fit.sx / fit.sy;
+    art.paintLight(cone, lampSpot());
+    clearTimeout(repaintTimer);
+    repaintTimer = setTimeout(() => paintBackground(level), resized ? 150 : 0);
+    resized = true;
+  }
+  new ResizeObserver(resize).observe(canvas);
   const levels = [
     ['Sunset Creek', 600, 0], ['Copper Hollow', 675, 1], ['Old Pine Quarry', 750, 2],
     ['Emerald Basin', 850, 3], ['Dusty Ridge', 950, 4], ['Moonstone Cavern', 1050, 5],
@@ -48,31 +74,47 @@
     const baseline = 550 + 4200 * (1 - Math.exp(-index / 35));
     entry[1] = Math.round(baseline * targetRhythm[index % 5] / 25) * 25;
   });
+  // As in the 2003 original: big gold pays but drags, rocks are heavy and nearly
+  // worthless, diamonds are light and rich but small. Values are relative; each
+  // mine rescales treasure to its target, while rocks keep their flat pittance.
   const types = {
-    small: { radius: 17, value: 200, weight: .9, color: '#eabc52' },
-    gold: { radius: 29, value: 475, weight: 1.8, color: '#edbc50' },
-    large: { radius: 43, value: 1000, weight: 3.2, color: '#f2c45e' },
-    rock: { radius: 34, value: 75, weight: 2.2, color: '#6e7166' },
-    diamond: { radius: 16, value: 550, weight: 1, color: '#b3efeb' },
-    gem: { radius: 19, value: 300, weight: .95, color: '#95bdaa' },
+    small: { radius: 16, value: 100, weight: 1.1, color: '#eabc52' },
+    gold: { radius: 28, value: 350, weight: 2.3, color: '#edbc50' },
+    large: { radius: 43, value: 900, weight: 4.4, color: '#f2c45e' },
+    rock: { radius: 34, value: 20, weight: 3.8, color: '#6e7166' },
+    diamond: { radius: 14, value: 600, weight: .8, color: '#b3efeb' },
+    gem: { radius: 18, value: 300, weight: 1, color: '#95bdaa' },
     bag: { radius: 22, value: 350, weight: 1.05, color: '#c8a071' },
     tnt: { radius: 25, value: 0, weight: 1, color: '#ba4938' },
     pig: { radius: 26, value: 25, weight: .6, speed: 65, color: '#a0846a' },
     diamondPig: { radius: 32, value: 575, weight: 1.1, speed: 150, color: '#9d7968' }
   };
-  // Fixed treasure budgets avoid unwinnable low-value random rolls.
-  const spawnCounts = [
-    { small: 3, gold: 3, large: 2, diamond: 1, gem: 2, bag: 1, rock: 2 }, // 1–10
-    { small: 3, gold: 4, large: 3, diamond: 2, gem: 2, bag: 1, rock: 3 }, // 11–40
-    { small: 2, gold: 4, large: 3, diamond: 3, gem: 3, bag: 1, rock: 3 }  // 41–100
-  ];
-  const blastRadius = 120, diamondBonus = 1.5, strengthBonus = 1.5, dynamiteCapacity = 3;
-  let mapVersion = 2;
+  // Fixed treasure budgets avoid unwinnable low-value random rolls. Layout v3 adds
+  // blocking rocks and more boards than one minute can clear, so routes matter.
+  const spawnCounts = {
+    2: [
+      { small: 3, gold: 3, large: 2, diamond: 1, gem: 2, bag: 1, rock: 2 }, // 1–10
+      { small: 3, gold: 4, large: 3, diamond: 2, gem: 2, bag: 1, rock: 3 }, // 11–40
+      { small: 2, gold: 4, large: 3, diamond: 3, gem: 3, bag: 1, rock: 3 }  // 41–100
+    ],
+    3: [
+      { small: 4, gold: 3, large: 2, diamond: 1, gem: 1, bag: 1, rock: 4 }, // 1–10
+      { small: 3, gold: 4, large: 2, diamond: 2, gem: 2, bag: 1, rock: 5 }, // 11–40
+      { small: 3, gold: 3, large: 2, diamond: 3, gem: 2, bag: 2, rock: 6 }  // 41–100
+    ]
+  };
+  const blastRadius = 120, diamondBonus = 1.5, strengthBonus = 1.5, dynamiteCapacity = 3, reelPower = 300;
+  // v3 boards only place treasure the swinging claw (±1.16 rad) can actually reach.
+  const reachable = (x, y, layoutVersion) => layoutVersion < 3 || Math.abs(Math.atan2(x - origin.x, y - origin.y)) < 1.08;
+  let mapVersion = 3;
   let level = 0, bank = 0, haul = 0, time = 60, phase = 'ready', objects = [];
   let angle = 0, swing = 0, length = 23, hookState = 'swing', caught = null;
-  let dynamite = 0, strength = false, book = false, sound = false, audio;
+  let dynamite = 0, strength = false, book = false, sound = true, audio;
   let magnet = false, magnetArmed = false, revealUntil = 0, reelSpeed = 0;
   let lastFrame = 0, deadline = 0, toastUntil = 0, particles = [], popups = [], shakeMag = 0, shakeTime = 0;
+  // Game feel: crank position, ratchet cadence, hit-stop, screen flash, title card, goal moment.
+  let crankAngle = 0, reelClick = 0, hitStop = 0, flash = null, banner = null, goalMet = false, lastSecond = 60;
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
   const money = n => '$' + n.toLocaleString('en-US');
   // New games and Continue must share storage from the first save onward.
   const db = new Dexie('GoldMining');
@@ -98,7 +140,7 @@
   }
   function validSave(s) {
     if (!s || s.version !== 1 || !Number.isInteger(s.level) || s.level < 0 || s.level >= levels.length) return false;
-    if (s.mapVersion !== undefined && ![1, 2].includes(s.mapVersion)) return false;
+    if (s.mapVersion !== undefined && ![1, 2, 3].includes(s.mapVersion)) return false;
     const map = makeMap(s.level, s.mapVersion ?? 1);
     return ['paused', 'shop', 'lost', 'won'].includes(s.phase)
       && (s.phase !== 'shop' || s.level < levels.length - 1)
@@ -120,6 +162,7 @@
       if (!s) return false;
       if (!validSave(s)) throw new Error('Invalid or unsupported save data');
       ({ level, bank, haul, time, angle, swing, length, hookState, dynamite, strength, book, sound } = s);
+      goalMet = bank + haul >= levels[level][1]; lastSecond = Math.ceil(time);
       mapVersion = s.mapVersion ?? 1;
       magnet = s.magnet ?? false; magnetArmed = s.magnetArmed ?? false;
       objects = makeMap(level);
@@ -153,27 +196,28 @@
       for (let i = 0; i < density; i++) kinds.push(i % 2 ? 'large' : 'diamond');
       for (let i = 0; i < Math.floor(density / 2); i++) kinds.push('rock');
     } else {
-      const counts = { ...spawnCounts[index < 10 ? 0 : index < 40 ? 1 : 2] };
+      const counts = { ...spawnCounts[layoutVersion][index < 10 ? 0 : index < 40 ? 1 : 2] };
       // Alternate gold-heavy and gem-heavy mines without adding hazards.
       if (index % 2) { counts.large--; counts.gem += 2; }
       for (const [type, count] of Object.entries(counts)) kinds.push(...Array(count).fill(type));
     }
     const map = kinds.map((type, id) => {
       const spec = types[type];
-      return { type, id, ...spec, x: 0, y: 0, taken: false, rotation: rand() * .6 - .3, value: type === 'bag' ? spec.value - 150 + Math.floor(rand() * 7) * 50 : spec.value };
+      return { type, id, ...spec, x: 0, y: 0, taken: false, rotation: rand() * .6 - .3, value: type === 'bag' ? Math.round(spec.value * (.2 + rand() * 1.6) / 25) * 25 : spec.value };
     }).reduce((placed, obj) => {
       for (let attempt = 0; attempt < 500; attempt++) {
         obj.x = 85 + rand() * 930;
         obj.y = 220 + rand() * (300 - obj.radius);
-        if (placed.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + 18)) break;
+        if (reachable(obj.x, obj.y, layoutVersion) && placed.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + 18)) break;
       }
       placed.push(obj); return placed;
     }, []);
-    // Require 45–50% at mines 1–10, 52–60% at 11–40, and 60–68% at 41–100.
+    // Legacy boards: 45–50% at mines 1–10, 52–60% at 11–40, 60–68% at 41–100.
+    // v3 boards fit a minute's work, so goals ask 60–66%, 68–74%, then 74–78%.
     // Each band ramps gradually while preserving five-mine challenge/recovery cycles.
-    const baseShare = index < 10 ? .475
-      : index < 40 ? .545 + .03 * (index - 10) / 29
-      : .625 + .03 * (index - 40) / 59;
+    const baseShare = layoutVersion < 3
+      ? (index < 10 ? .475 : index < 40 ? .545 + .03 * (index - 10) / 29 : .625 + .03 * (index - 40) / 59)
+      : (index < 10 ? .6 + .06 * index / 9 : index < 40 ? .68 + .06 * (index - 10) / 29 : .74 + .04 * (index - 40) / 59);
     const targetShare = baseShare + difficultyRhythm[index % 5];
     const treasure = map.filter(obj => obj.type !== 'rock');
     const richness = levels[index][1] / (targetShare * treasure.reduce((sum, obj) => sum + obj.value, 0));
@@ -187,8 +231,8 @@
       const diamondTier = index < 9 ? 0 : index >= 19 ? 2 : 1;
       hazards.push(...Array(Math.floor(rand() * (diamondTier + 1))).fill('diamondPig'));
     } else {
-      // Introduce TNT at mine 6; two only on mid/late finales.
-      if (index >= 5) hazards.push('tnt');
+      // Introduce TNT at mine 6 (mine 4 on v3 boards); two only on mid/late finales.
+      if (index >= (layoutVersion < 3 ? 5 : 3)) hazards.push('tnt');
       if (index >= 10 && index % 5 === 4) hazards.push('tnt');
       if (index >= 10) hazards.push('pig', 'diamondPig');
     }
@@ -202,7 +246,7 @@
         const safeBlast = layoutVersion === 1 || type !== 'tnt' || map.every(other =>
           Math.hypot(obj.x - other.x, obj.y - other.y) >
           (other.type === 'tnt' ? 2 * blastRadius : blastRadius + other.radius));
-        if (safeBlast && map.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + (obj.speed ? 4 : 18))) {
+        if (safeBlast && reachable(obj.x, obj.y, layoutVersion) && map.every(other => Math.hypot(obj.x - other.x, obj.y - other.y) > obj.radius + other.radius + (obj.speed ? 4 : 18))) {
           if (obj.speed) { obj.startX = obj.x; obj.direction = 1; obj.rotation = 0; }
           map.push(obj); break;
         }
@@ -259,18 +303,68 @@
       obj.direction = distance < span ? 1 : -1;
     }
   }
-  function tone(frequency = 660, duration = .12) {
+  // --- Procedural sound kit: every effect is synthesized; there are no audio files. ---
+  let sfxBus = null, noise = null;
+  function soundBus() {
+    audio ||= new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === 'suspended') audio.resume();
+    if (!sfxBus) {
+      // A gentle compressor glues overlapping effects and stops clipping on big hauls.
+      const glue = audio.createDynamicsCompressor();
+      glue.threshold.value = -16; glue.ratio.value = 4; glue.connect(audio.destination);
+      sfxBus = audio.createGain(); sfxBus.gain.value = .9; sfxBus.connect(glue);
+      noise = audio.createBuffer(1, audio.sampleRate, audio.sampleRate);
+      const data = noise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    return sfxBus;
+  }
+  function voice(type, frequency, delay, duration, volume, glideTo) {
+    const bus = soundBus(), t = audio.currentTime + delay;
+    const osc = audio.createOscillator(), gain = audio.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(frequency, t);
+    if (glideTo) osc.frequency.exponentialRampToValueAtTime(glideTo, t + duration);
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(volume, t + .006);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + duration);
+    osc.connect(gain); gain.connect(bus); osc.start(t); osc.stop(t + duration + .02);
+  }
+  function hiss(filterType, frequency, delay, duration, volume, sweepTo, q = 1) {
+    const bus = soundBus(), t = audio.currentTime + delay;
+    const src = audio.createBufferSource(), filter = audio.createBiquadFilter(), gain = audio.createGain();
+    src.buffer = noise; src.loop = true;
+    filter.type = filterType; filter.Q.value = q; filter.frequency.setValueAtTime(frequency, t);
+    if (sweepTo) filter.frequency.exponentialRampToValueAtTime(sweepTo, t + duration);
+    gain.gain.setValueAtTime(.0001, t); gain.gain.exponentialRampToValueAtTime(volume, t + .01);
+    gain.gain.exponentialRampToValueAtTime(.0001, t + duration);
+    src.connect(filter); filter.connect(gain); gain.connect(bus); src.start(t, Math.random() * .5); src.stop(t + duration + .02);
+  }
+  const SFX = {
+    drop: () => { hiss('bandpass', 1800, 0, .3, .12, 420, 1.2); voice('triangle', 240, 0, .08, .08, 110); },
+    ratchet: weight => { hiss('highpass', 3200, 0, .025, .05 + Math.min(.05, weight * .012)); voice('square', 900 / Math.max(.8, weight), 0, .018, .018); },
+    clink: () => { voice('sine', 1568, 0, .45, .1); voice('sine', 2349, .01, .35, .05); voice('triangle', 784, 0, .2, .05); },
+    sparkle: () => [2093, 2637, 3136, 4186].forEach((f, i) => voice('sine', f, i * .045, .35, .06)),
+    thud: () => { hiss('lowpass', 500, 0, .22, .22, 90); voice('sine', 110, 0, .25, .2, 45); },
+    wall: () => hiss('lowpass', 900, 0, .14, .1, 200),
+    bank: big => { voice('triangle', 1318.5, 0, .18, .08); voice('triangle', 1975.5, .07, big ? .55 : .3, .08); if (big) voice('sine', 2637, .14, .5, .045); },
+    boom: () => { hiss('lowpass', 2400, 0, 1.1, .5, 60, .7); voice('sine', 70, 0, .7, .45, 30); voice('sawtooth', 140, 0, .25, .07, 40); },
+    tick: () => voice('square', 1800, 0, .03, .035),
+    goal: () => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => { voice('triangle', f, i * .09, .5, .08); voice('sine', f * 2, i * .09, .3, .025); }),
+    fail: () => [392, 349.23, 293.66].forEach((f, i) => voice('triangle', f, i * .16, .42, .08)),
+    buy: () => { voice('square', 1046.5, 0, .06, .035); voice('triangle', 1568, .06, .25, .07); },
+    ui: () => voice('triangle', 660, 0, .08, .05)
+  };
+  function sfx(name, arg) {
     if (!sound) return;
-    try {
-      audio ||= new (window.AudioContext || window.webkitAudioContext)();
-      audio.resume();
-      const oscillator = audio.createOscillator(), gain = audio.createGain();
-      oscillator.connect(gain); gain.connect(audio.destination);
-      oscillator.type = 'sine'; oscillator.frequency.value = frequency;
-      gain.gain.setValueAtTime(.08, audio.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
-      oscillator.start(); oscillator.stop(audio.currentTime + duration);
-    } catch { sound = false; updateSound(); }
+    try { SFX[name](arg); } catch { sound = false; updateSound(); }
+  }
+  // Juice that must stay gentle for players who ask the OS for reduced motion.
+  function flashScreen(rgb, alpha) { flash = { rgb, a: alpha * (calm.matches ? .35 : 1) }; }
+  function showBanner(kicker, title, detail) { banner = { kicker, title, detail, start: performance.now() }; }
+  function checkGoal() {
+    if (goalMet || bank + haul < levels[level][1]) return;
+    goalMet = true;
+    showBanner('TARGET MET', 'Strike it rich!', 'Every extra dollar carries to the next mine');
+    sfx('goal'); burst({ x: 700, y: 92 }, 'fire');
   }
   function notify(text) { $('toast').textContent = text; toastUntil = performance.now() + 2500; }
   function showDialog(content) {
@@ -320,6 +414,10 @@
     length = 23; caught = null; hookState = 'swing'; particles = []; popups = [];
     magnetArmed = false; revealUntil = 0; reelSpeed = 0;
     phase = 'playing'; deadline = performance.now() + 60000;
+    const goal = levels[level][1];
+    goalMet = bank >= goal; lastSecond = 60; hitStop = 0; flash = null;
+    showBanner(`MINE ${String(level + 1).padStart(2, '0')} OF ${levels.length}`, levels[level][0],
+      `Target ${money(goal)} · ${goalMet ? 'your surplus already covers it' : '60 seconds on the clock'}`);
     hideDialog(); updateHUD(); saveProgress();
   }
   function finishLevel() {
@@ -328,6 +426,7 @@
     const total = bank + haul, goal = levels[level][1];
     if (total < goal) {
       phase = 'lost';
+      sfx('fail');
       renderResult();
     } else {
       bank = total - goal; haul = 0; strength = false; book = false;
@@ -335,7 +434,7 @@
         phase = 'won';
         renderResult();
       } else { phase = 'shop'; renderShop(); }
-      tone(880, .3);
+      sfx('goal');
     }
     updateHUD(); saveProgress();
   }
@@ -345,17 +444,17 @@
       $('retry').onclick = startLevel;
     } else {
       showDialog(`<span class="badge">${levels.length} SHAFTS. ONE LEGEND.</span><h2>What a haul!</h2><p>You worked all ${levels.length} mines and still carry ${money(bank)}.<br>The whole crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
-      $('restart').onclick = () => { mapVersion = 2; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
+      $('restart').onclick = () => { mapVersion = 3; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
     }
   }
   function supplyPrices(index) {
     const goal = levels[index][1];
     // Scale sinks with the upcoming mine, rounded to readable $25 price steps.
     return {
-      dynamite: Math.max(100, Math.ceil(goal * .035 / 25) * 25),
-      strength: Math.max(100, Math.ceil(goal * .08 / 25) * 25),
-      book: Math.max(150, Math.ceil(goal * .10 / 25) * 25),
-      magnet: Math.max(50, Math.ceil(goal * .03 / 25) * 25)
+      dynamite: Math.max(100, Math.ceil(goal * .05 / 25) * 25),
+      strength: Math.max(150, Math.ceil(goal * .12 / 25) * 25),
+      book: Math.max(150, Math.ceil(goal * .12 / 25) * 25),
+      magnet: Math.max(75, Math.ceil(goal * .06 / 25) * 25)
     };
   }
   function renderShop() {
@@ -379,14 +478,14 @@
     if (item === 'strength') strength = true;
     if (item === 'book') book = true;
     if (item === 'magnet') magnet = true;
-    tone(540); renderShop(); updateHUD(); saveProgress();
+    sfx('buy'); renderShop(); updateHUD(); saveProgress();
   }
   function drop() {
     if (phase !== 'playing' || hookState !== 'swing') return;
     if (performance.now() >= deadline) { finishLevel(); return; }
     hookState = 'out'; reelSpeed = 0;
     if (magnetArmed) magnet = false;
-    tone(230, .08); updateHUD(); saveProgress();
+    sfx('drop'); updateHUD(); saveProgress();
   }
   const hookPosition = () => ({ x: origin.x + Math.sin(angle) * length, y: origin.y + Math.cos(angle) * length });
   // Debris: chunky stone shards that fall under gravity, gold dust that drifts and glitters.
@@ -423,7 +522,8 @@
       }
     }
     caught = null; hookState = 'back';
-    tone(70, .35); notify('TNT! Nearby treasure destroyed. No points earned.');
+    sfx('boom'); flashScreen('255,190,110', .55); hitStop = .1;
+    notify('TNT! Nearby treasure destroyed. No points earned.');
     saveProgress();
   }
   function explode() {
@@ -432,7 +532,7 @@
     const pos = hookPosition();
     burst(pos, 'fire');
     shake(12);
-    caught = null; dynamite--; tone(90, .25); notify('Catch destroyed. Back to the good stuff.'); updateHUD(); saveProgress();
+    caught = null; dynamite--; sfx('boom'); flashScreen('255,190,110', .3); notify('Catch destroyed. Back to the good stuff.'); updateHUD(); saveProgress();
   }
   function pause() {
     if (phase === 'playing') {
@@ -451,27 +551,35 @@
     if (phase !== 'playing') return;
     time = Math.max(0, (deadline - now) / 1000);
     if (!time) { finishLevel(); return; }
+    const second = Math.ceil(time);   // the last ten seconds tick audibly
+    if (second !== lastSecond) { lastSecond = second; if (second <= 10) sfx('tick'); }
     movePigs();
     if (hookState === 'swing') { swing += dt * 1.6; angle = Math.sin(swing) * 1.16; }
     else if (hookState === 'out') {
-      length += 540 * dt;
+      length += 540 * dt; crankAngle -= 540 * dt * .045;
       const p = hookPosition();
       // Match paint order when a patrolling pig crosses in front of stationary treasure.
       caught = objects.findLast(o => !o.taken && Math.hypot(o.x - p.x, (o.y - p.y) / objectAspect) < o.radius + 8
         + (magnetArmed && ['small', 'gold', 'large'].includes(o.type) ? 24 : 0)) || null;
       if (caught?.type === 'tnt') detonate(caught);
       else if (caught) {
-        caught.taken = true; hookState = 'back'; tone(320, .08);
-        const metal = caught.type === 'rock' ? 'stone' : 'gold';
+        caught.taken = true; hookState = 'back';
+        const metal = caught.type === 'rock' ? 'stone' : 'gold', gem = ['diamond', 'gem', 'diamondPig'].includes(caught.type);
+        sfx(caught.type === 'rock' ? 'thud' : gem ? 'sparkle' : 'clink');
         burst(p, metal);
         shake(caught.type === 'large' || caught.type === 'diamondPig' ? 7 : 3);
+        // A beat of hit-stop sells the weight of the prizes worth chasing.
+        if (caught.type === 'large' || gem) hitStop = .07;
+        if (caught.type === 'diamond' || caught.type === 'diamondPig') flashScreen('200,255,250', .16);
       }
-      else if (p.x < 20 || p.x > W - 20 || p.y > H - 30) hookState = 'back';
+      else if (p.x < 20 || p.x > W - 20 || p.y > H - 30) { hookState = 'back'; sfx('wall'); burst(p); }
     } else {
-      const targetSpeed = 360 * (strength ? strengthBonus : 1) / (caught ? caught.weight : .65);
+      const targetSpeed = reelPower * (strength ? strengthBonus : 1) / (caught ? caught.weight : .65);
       // Loaded reels take time to overcome inertia, while an empty claw snaps home.
       reelSpeed += (targetSpeed - reelSpeed) * (1 - Math.exp(-dt * (caught ? 4 : 12)));
-      length -= reelSpeed * dt;
+      length -= reelSpeed * dt; crankAngle += reelSpeed * dt * .045;
+      reelClick += reelSpeed * dt;   // the winch ratchet clicks once per notch of cable
+      if (reelClick > 28) { reelClick = 0; sfx('ratchet', caught ? caught.weight : .65); }
       if (length <= 23) {
         length = 23; hookState = 'swing'; magnetArmed = false;
         if (caught) {
@@ -479,13 +587,15 @@
             ? types.pig.value + Math.round((caught.value - types.pig.value) * (book ? diamondBonus : 1))
             : Math.round(caught.value * (caught.type === 'diamond' && book ? diamondBonus : 1));
           haul += value;
+          if (!calm.matches) $('haul').animate([{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.4)' });
+          if (value >= 800) flashScreen('255,214,120', .14);
           popups.push({ text: '+' + money(value), x: 700, y: 74, life: 1.6 });
           burst({ x: 550, y: 112 }, value >= 400 ? 'fire' : 'gold');
           shake(value >= 800 ? 16 : value >= 400 ? 11 : 5);
           if (caught.type === 'bag') notify('Mystery bag! You found ' + money(value) + '.');
           if (caught.type === 'diamondPig') notify('Diamond-mouth pig! ' + money(value) + ' secured.');
-          tone(caught.type === 'rock' ? 180 : 780, .15); caught = null;
-          saveProgress();
+          sfx(caught.type === 'rock' ? 'thud' : 'bank', value >= 400); caught = null;
+          checkGoal(); saveProgress();
         }
         if (objects.every(o => o.taken)) { finishLevel(); return; }
       }
@@ -646,7 +756,7 @@
       } else {
         polygon([[-r * .8, -r * .2], [-r * .55, -r * .62], [0, -r * .8], [-r * .1, -r * .3]], 'rgba(216,214,192,.4)');
       }
-      ctx.drawImage(CavernArt.surface(obj.id, r, rocky), -r * 1.3, -r * 1.3, r * 2.6, r * 2.6);
+      ctx.drawImage(art.surface(obj.id, r, rocky), -r * 1.3, -r * 1.3, r * 2.6, r * 2.6);
       ctx.restore();
       polygon([[-r * .62, r * .42], [-r * .2, r * .62], [r * .44, r * .5], [r * .1, r * .74], [-r * .5, r * .68]], 'rgba(0,0,0,.22)');
     }
@@ -674,18 +784,33 @@
     floor.addColorStop(0, 'rgba(2,3,6,0)'); floor.addColorStop(1, 'rgba(1,2,4,.5)');
     c.fillStyle = floor; c.fillRect(0, H * .58, W, H * .42);
   })();
-  CavernArt.paintLight(cone, LAMP);
-  function drawGlow(x, y, r, now, spread = 4.6, base = .42) {
+  // The rig is drawn squashed around the pivot, so its lantern moves with objectAspect.
+  function lampSpot() { return { x: LAMP.x, y: origin.y + (LAMP.y - origin.y) * objectAspect }; }
+  art.paintLight(cone, LAMP);
+  // Switching styles repaints the static layers; nothing else depends on the provider.
+  function applyArt(name) {
+    if (!ART_PROVIDERS[name]) return;
+    artName = name; art = window[ART_PROVIDERS[name]];
+    document.documentElement.dataset.art = artName;
+    try { localStorage.setItem('gm-art', artName); } catch {}
+    art.paintLight(cone, lampSpot());
+    paintBackground(level);
+  }
+  function drawGlow(x, y, r, now, spread = 4.6, base = .42, aspect = 1) {
     const pulse = .72 + Math.sin(now * .0031 + x * .045 + y * .027) * .28;
     const s = r * spread * (.86 + pulse * .22);
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = base * pulse;
-    ctx.drawImage(GLOW, x - s / 2, y - s / 2, s, s);
+    ctx.drawImage(GLOW, x - s / 2, y - s * aspect / 2, s, s * aspect);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
   // Paint the rock once per mine; the moving hook and treasures use the foreground canvas.
+  // The backing canvas matches the screen, so baked grain stays crisp at any size.
+  // view.top/bottom are the visible field rows beyond 0..H the art must also cover.
   function paintBackground(seed = 0) {
-    CavernArt.paintBackground(background, seed, LAMP);
+    background.width = canvas.width; background.height = canvas.height;
+    background.getContext('2d').setTransform(fit.sx, 0, 0, fit.sy, 0, fit.oy);
+    art.paintBackground(background, seed, lampSpot(), { top: -fit.oy / fit.sy, bottom: (canvas.height - fit.oy) / fit.sy, aspect: objectAspect });
   }
   // The rig: timber headframe, winch, ore cart heaped with gold, and the one lantern that lights the shaft.
   function drawRig(now) {
@@ -701,12 +826,14 @@
     ellipse(550, 106, 16, 16, '#5c4e39');
     ellipse(550, 106, 7, 7, '#14110d');
     for (let i = 0; i < 6; i++) {
-      const a = now * .0007 + i * Math.PI / 3;
+      const a = crankAngle * .35 + i * Math.PI / 3;
       line([[550, 106], [550 + Math.cos(a) * 15, 106 + Math.sin(a) * 15]], '#82704e', 2);
     }
-    const crank = now * .0025;
-    line([[550, 106], [550 + Math.cos(crank) * 20, 106 + Math.sin(crank) * 20]], '#6b5738', 5);
-    ellipse(550 + Math.cos(crank) * 20, 106 + Math.sin(crank) * 20, 4.5, 4.5, '#a58b5c');
+    // The crank turns with the cable: forward while reeling, backward as the claw pays out.
+    const handleX = 550 + Math.cos(crankAngle) * 13, handleY = 106 + Math.sin(crankAngle) * 13;
+    line([[550, 106], [handleX, handleY]], '#6b5738', 5);
+    ellipse(handleX, handleY, 4.5, 4.5, '#a58b5c');
+    const [elbowX, elbowY, handX, handY] = reach(488, 92, handleX, handleY, 37, 39);
     // Ore cart: rusted steel hopper on iron wheels, heaped past the rim.
     const cart = () => { ctx.beginPath(); ctx.moveTo(646, 94); ctx.lineTo(780, 94); ctx.lineTo(764, 132); ctx.lineTo(662, 132); ctx.closePath(); };
     cart();
@@ -717,7 +844,7 @@
     ctx.save(); cart(); ctx.clip();
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(646, 120, 134, 14);
     line([[646,95],[780,95]], '#edc47b', 1); line([[650,98],[777,98]], '#171914', 2);
-    ctx.globalAlpha=.4; ctx.drawImage(CavernArt.surface(404,60,true),646,94,134,40); ctx.globalAlpha=1;
+    ctx.globalAlpha=.4; ctx.drawImage(art.surface(404,60,true),646,94,134,40); ctx.globalAlpha=1;
     ctx.restore();
     // Gold heaped over the rim, irregular as it was shovelled in.
     const jitter = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
@@ -758,7 +885,7 @@
     ctx.fillStyle = '#05060a'; ctx.strokeStyle = '#05060a'; ctx.lineCap = 'round';
     ctx.lineWidth = 9;                                                                          // far arm
     ctx.beginPath(); ctx.moveTo(480, 88); ctx.lineTo(468, 112); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(482, 86); ctx.quadraticCurveTo(516, 92, 536, 102); ctx.stroke(); // near arm to the crank
+    ctx.beginPath(); ctx.moveTo(482, 86); ctx.lineTo(elbowX, elbowY); ctx.lineTo(handX, handY); ctx.stroke(); // near arm on the crank
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(452, 110); ctx.lineTo(446, 134); ctx.lineTo(460, 134); ctx.lineTo(468, 112); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(470, 112); ctx.lineTo(474, 134); ctx.lineTo(488, 134); ctx.lineTo(490, 110); ctx.closePath(); ctx.fill();
@@ -781,14 +908,20 @@
     line([[482,89],[479,109]], '#887343', 2);
     polygon([[471,72],[481,70],[481,79],[475,84],[469,78]], '#8f734b');
     polygon([[469,76],[481,76],[478,85],[472,83]], '#a49b7b');
-    line([[488,92],[511,99],[532,102]], '#514c37', 7);
-    ellipse(532,102,4,3,'#a38a58');
+    line([[488,92],[elbowX,elbowY],[handX,handY]], '#514c37', 7);
+    ellipse(handX,handY,4,3,'#a38a58');
     line([[453,115],[450,130]], '#25312c', 8);
     line([[476,115],[480,130]], '#30382e', 8);
     line([[449,133],[459,133]], '#121512', 4);
     line([[478,133],[490,133]], '#121512', 4);
     ctx.restore();
     return flicker;
+  }
+  // Two-bone reach: the elbow bends downward and the hand stops at full stretch.
+  function reach(sx, sy, tx, ty, upper, fore) {
+    const d = Math.max(1, Math.min(upper + fore - .01, Math.hypot(tx - sx, ty - sy))), base = Math.atan2(ty - sy, tx - sx);
+    const bend = Math.acos(Math.max(-1, Math.min(1, (upper * upper + d * d - fore * fore) / (2 * upper * d))));
+    return [sx + Math.cos(base + bend) * upper, sy + Math.sin(base + bend) * upper, sx + Math.cos(base) * d, sy + Math.sin(base) * d];
   }
   // A segmented steel chain: every link drawn, bowed and vibrating under load.
   function drawChain(from, to, tension, now) {
@@ -871,20 +1004,29 @@
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   }
   function draw(now) {
-    ctx.clearRect(-24, -24, W + 48, H + 48);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(fit.sx, 0, 0, fit.sy, 0, fit.oy);
+    const screen = [0, -fit.oy / fit.sy, W, canvas.height / fit.sy];   // the whole canvas, in field units
     ctx.save();
     const amp = shakeMag * (shakeTime / .4);
     if (amp > .08) ctx.translate(Math.sin(now * .09) * amp, Math.cos(now * .13) * amp * .7);
-    ctx.drawImage(background, 0, 0);
+    ctx.drawImage(background, ...screen);
+    art.drawAmbient?.(ctx, now, { aspect: objectAspect });
+    // No ctx.filter here: a full-scene filter halved the frame rate.
+    ctx.save();
+    const litScene = art.lit !== false;
     ctx.save(); ctx.translate(origin.x, origin.y); ctx.scale(1, objectAspect); ctx.translate(-origin.x, -origin.y);
     const flicker = drawRig(now); ctx.restore();
-    // Light and haze before the treasure so gold sits inside the glow.
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .7 * flicker;
-    ctx.drawImage(cone, 0, 0);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (litScene) {
+      // Light and haze before the treasure so gold sits inside the glow.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = .7 * flicker;
+      ctx.drawImage(cone, 0, 0);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
     // Dust motes drifting through the beam.
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; litScene && i < 64; i++) {
       const t = now * .00004 + i * .137;
       const dx = LAMP.x + Math.sin(i * 2.7 + now * .0004) * (60 + i * 9);
       const dy = LAMP.y + ((t * 900 + i * 63) % (H + 60));
@@ -895,25 +1037,31 @@
       ctx.fillRect(dx, dy, size, size);
     }
     ctx.globalAlpha = 1;
-    // Contact shadow: the platform edge swallows the first few pixels of rock.
-    const lip = ctx.createLinearGradient(0, 145, 0, 192);
-    lip.addColorStop(0, 'rgba(0,0,0,.6)'); lip.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = lip; ctx.fillRect(396, 145, 404, 47);
+    // Contact shadow: the catwalk edge swallows the first few pixels of rock.
+    if (litScene) {
+      const lip = ctx.createLinearGradient(0, 145, 0, 192);
+      lip.addColorStop(0, 'rgba(0,0,0,.6)'); lip.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = lip; ctx.fillRect(396, 145, 404, 47);
+    }
     for (const o of objects) {
       if (o.taken) continue;
       // Ambient occlusion: the rock is darker right around a buried object.
-      const ao = ctx.createRadialGradient(o.x, o.y, o.radius * .9, o.x, o.y, o.radius * 2.1);
+      ctx.save(); ctx.translate(o.x, o.y); ctx.scale(1, objectAspect);
+      const ao = ctx.createRadialGradient(0, 0, o.radius * .9, 0, 0, o.radius * 2.1);
       ao.addColorStop(0, 'rgba(0,0,0,.3)'); ao.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = ao;
-      ctx.fillRect(o.x - o.radius * 2.1, o.y - o.radius * 2.1, o.radius * 4.2, o.radius * 4.2);
+      ctx.fillRect(-o.radius * 2.1, -o.radius * 2.1, o.radius * 4.2, o.radius * 4.2);
+      ctx.restore();
       if (o.type === 'rock') ctx.globalAlpha = .92;
-      if (o.type !== 'rock' && o.type !== 'tnt' && !o.speed) drawGlow(o.x, o.y, o.radius, now, o.type === 'diamond' || o.type === 'gem' ? 3.4 : 3.7, o.type === 'large' ? .24 : .2);
+      if (o.type !== 'rock' && o.type !== 'tnt' && !o.speed) drawGlow(o.x, o.y, o.radius, now, o.type === 'diamond' || o.type === 'gem' ? 3.4 : 3.7, o.type === 'large' ? .24 : .2, objectAspect);
       drawObject(o);
       ctx.globalAlpha = 1;
       if (now < revealUntil && o.value > 0) {
+        ctx.save(); ctx.translate(o.x, o.y - (o.radius + 10) * objectAspect); ctx.scale(1, objectAspect);
         ctx.font = '600 12px Georgia'; ctx.textAlign = 'center'; ctx.lineWidth = 4;
-        ctx.strokeStyle = '#080c0e'; ctx.strokeText(money(o.value), o.x, o.y - o.radius - 10);
-        ctx.fillStyle = '#f1ce7e'; ctx.fillText(money(o.value), o.x, o.y - o.radius - 10);
+        ctx.strokeStyle = '#080c0e'; ctx.strokeText(money(o.value), 0, 0);
+        ctx.fillStyle = '#f1ce7e'; ctx.fillText(money(o.value), 0, 0);
+        ctx.restore();
       }
     }
     const p = hookPosition();
@@ -922,15 +1070,18 @@
     if (caught) drawObject(caught, p.x, p.y + caught.radius * .95 * objectAspect);
     drawClaw(p, now);   // the claw grips from above, so it draws over the catch
     // A faint second pass warms the treasure without obscuring its silhouette.
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = .16 * flicker;
-    ctx.drawImage(cone, 0, 0);
-    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (litScene) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = .16 * flicker;
+      ctx.drawImage(cone, 0, 0);
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.restore();   // ends the scene layer
     drawParticles();
     for (const pop of popups) {
       const grow = Math.min(1, (1.6 - pop.life) * 6), alpha = Math.min(1, pop.life);
       ctx.save(); ctx.globalAlpha = alpha;
-      ctx.translate(pop.x, pop.y); ctx.scale(.6 + grow * .4, .6 + grow * .4);
+      ctx.translate(pop.x, pop.y); ctx.scale(.6 + grow * .4, (.6 + grow * .4) * objectAspect);
       ctx.font = '700 32px Fraunces, Georgia, serif'; ctx.textAlign = 'center';
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(GLOW, -70, -55, 140, 110);
@@ -941,14 +1092,50 @@
       ctx.fillStyle = grad; ctx.fillText(pop.text, 0, 0);
       ctx.restore();
     }
-    ctx.drawImage(vignette, 0, 0);
+    if (litScene) ctx.drawImage(vignette, ...screen);
     ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (flash) { ctx.fillStyle = `rgba(${flash.rgb},${flash.a})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    if (banner) drawBanner(now);
     $('toast').classList.toggle('visible', now < toastUntil);
+  }
+  // Title cards are drawn in screen pixels so they read the same on phones and monitors.
+  function drawBanner(now) {
+    const t = (now - banner.start) / 1000, hold = 1.9;
+    if (t > hold + .5) { banner = null; return; }
+    const enter = 1 - Math.pow(1 - Math.min(1, t / .4), 3), alpha = enter * (1 - Math.max(0, (t - hold) / .5));
+    const cw = canvas.width, size = Math.min(cw * .06, canvas.height * .085), cy = fit.oy + H * fit.sy * .42;
+    const tint = art.bannerTint || '4,8,10', band = ctx.createLinearGradient(0, 0, cw, 0);
+    band.addColorStop(0, `rgba(${tint},0)`); band.addColorStop(.22, `rgba(${tint},.8)`);
+    band.addColorStop(.78, `rgba(${tint},.8)`); band.addColorStop(1, `rgba(${tint},0)`);
+    const rule = ctx.createLinearGradient(0, 0, cw, 0);
+    rule.addColorStop(0, 'rgba(232,197,122,0)'); rule.addColorStop(.5, 'rgba(232,197,122,.9)'); rule.addColorStop(1, 'rgba(232,197,122,0)');
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.fillStyle = band; ctx.fillRect(0, cy - size * 1.4, cw, size * 2.75);
+    ctx.fillStyle = rule; const hair = Math.max(1, size * .03);
+    ctx.fillRect(0, cy - size * 1.4, cw, hair); ctx.fillRect(0, cy + size * 1.35 - hair, cw, hair);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `700 ${Math.round(size * .26)}px Arial, sans-serif`; ctx.letterSpacing = `${Math.round(size * .08)}px`;
+    ctx.fillStyle = '#e8c57a'; ctx.fillText(banner.kicker, cw / 2, cy - size * .88);
+    ctx.letterSpacing = '0px';
+    ctx.font = `700 ${Math.round(size)}px Georgia, serif`;
+    const fitWidth = Math.min(1, cw * .9 / ctx.measureText(banner.title).width), grow = calm.matches ? 1 : 1.12 - .12 * enter;
+    ctx.save(); ctx.translate(cw / 2, cy); ctx.scale(fitWidth * grow, fitWidth * grow);
+    const ink = ctx.createLinearGradient(0, -size * .5, 0, size * .5);
+    ink.addColorStop(0, '#fff6d2'); ink.addColorStop(.5, '#ffd05e'); ink.addColorStop(1, '#d98f22');
+    ctx.lineWidth = size * .1; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(12,8,3,.9)'; ctx.strokeText(banner.title, 0, 0);
+    ctx.fillStyle = ink; ctx.fillText(banner.title, 0, 0);
+    ctx.restore();
+    ctx.font = `${Math.round(size * .3)}px Arial, sans-serif`; ctx.fillStyle = '#f3e7cf';
+    ctx.fillText(banner.detail, cw / 2, cy + size * .86);
+    ctx.restore();
   }
   function frame(now) {
     const elapsed = Math.min((now-lastFrame)/1000 || 0, .1);lastFrame=now;
+    if (flash && (flash.a -= elapsed * 2.4) <= 0) flash = null;
     // Small physics steps keep a fast hook from tunneling through tiny diamonds.
-    let remaining=elapsed;while(remaining>0){const step=Math.min(remaining,1/120);update(step,now);remaining-=step;}
+    if (hitStop > 0) hitStop -= elapsed;
+    else {let remaining=elapsed;while(remaining>0){const step=Math.min(remaining,1/120);update(step,now);remaining-=step;}}
     if (phase === 'playing' && now - lastSave >= 1000) saveProgress();
     draw(now);requestAnimationFrame(frame);
   }
@@ -991,28 +1178,29 @@
   $('settings').onclick = () => { $('settings-overlay').hidden = false; $('settings-close').focus(); };
   $('settings-close').onclick = () => { $('settings-overlay').hidden = true; if (!$('welcome-overlay').hidden) $('welcome-new').focus(); else canvas.focus({ preventScroll: true }); };
   $('settings-overlay').addEventListener('pointerdown', event => { if (event.target === $('settings-overlay')) $('settings-close').onclick(); });
-  $('sound-toggle').onchange = () => { sound = $('sound-toggle').checked; if (sound) tone(); saveProgress(); };
+  $('sound-toggle').onchange = () => { sound = $('sound-toggle').checked; sfx('ui'); saveProgress(); };
   $('music-toggle').onchange = () => { music = $('music-toggle').checked; try { localStorage.setItem('gm-music', music ? '1' : '0'); } catch {} updateMusic(); };
   $('shake-range').oninput = () => { shakeScale = $('shake-range').value / 100; try { localStorage.setItem('gm-shake', String(shakeScale)); } catch {} };
   $('sound-toggle').checked = sound;
   $('music-toggle').checked = music;
   $('shake-range').value = Math.round(shakeScale * 100);
+  for (const radio of document.querySelectorAll('input[name=art]')) {
+    radio.checked = radio.value === artName;
+    radio.onchange = () => { if (radio.checked) applyArt(radio.value); };
+  }
   // Press feedback: a gold-dust burst where the finger lands, drawn by the canvas particle system.
   function canvasPoint(event) {
-    const rect = canvas.getBoundingClientRect(), scale = Math.min(rect.width / canvas.width, rect.height / canvas.height);
-    return {
-      x: Math.max(0, Math.min(canvas.width, (event.clientX - rect.left - (rect.width - canvas.width * scale) / 2) / scale)),
-      y: Math.max(0, Math.min(canvas.height, (event.clientY - rect.top - (rect.height - canvas.height * scale) / 2) / scale))
-    };
+    const rect = canvas.getBoundingClientRect(), dpr = canvas.width / rect.width;
+    return { x: (event.clientX - rect.left) * dpr / fit.sx, y: ((event.clientY - rect.top) * dpr - fit.oy) / fit.sy };
   }
   for (const button of document.querySelectorAll('.action-item')) {
     button.addEventListener('pointerdown', event => { if (!button.disabled) burst(canvasPoint(event), 'gold'); });
   }
   $('strength-item').onclick = () => notify(`Strength active: ${strengthBonus}× pulling speed for this mine.`);
-  $('book-item').onclick = () => { if (phase === 'playing' && book) { revealUntil = performance.now() + 6000; tone(920); } };
+  $('book-item').onclick = () => { if (phase === 'playing' && book) { revealUntil = performance.now() + 6000; sfx('sparkle'); } };
   $('magnet-item').onclick = () => {
     if (phase !== 'playing' || !magnet || hookState !== 'swing') return;
-    magnetArmed = !magnetArmed; tone(480); updateHUD(); saveProgress();
+    magnetArmed = !magnetArmed; sfx('ui'); updateHUD(); saveProgress();
     notify(magnetArmed ? 'Magnetic claw armed for your next launch.' : 'Magnetic claw stowed.');
   };
   $('dynamite').onclick=explode;$('pause').onclick=pause;
@@ -1044,7 +1232,7 @@
     });
   $('welcome-new').onclick = () => {
     welcome.hidden = true;
-    mapVersion = 2; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false;
+    mapVersion = 3; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false;
     startLevel();
   };
   $('welcome-continue').onclick = async () => {

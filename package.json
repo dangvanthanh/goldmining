@@ -7,6 +7,6 @@
   "type": "commonjs",
   "main": "game.js",
   "scripts": {
-    "serve": "python3 -m http.server 8000"
+    "serve": "python -m http.server"
   }
 }
