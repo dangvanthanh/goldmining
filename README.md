@@ -1,219 +1,174 @@
 # Gold Mining
 
-A browser game with local progress saving through Dexie.js and IndexedDB. Serve this directory for reliable browser storage:
+A standalone, offline-friendly Canvas 2D game: 100 seeded mines, a swinging claw, 60-second rounds, a supplies shop, and local expedition saves. **Classic** (default) is vintage prairie and copper earth—not Sky's alpine forest. **Cavern** is cinematic blue-black rock and amber lantern light; **Sky** is a sunlit mountain expedition. Local hand-painted environments and transparent material/character sprites combine with native Canvas lighting and system fonts. Procedural artwork remains available if image loading fails. No game engine or runtime art service.
+
+## Run
 
 ```sh
-python3 -m http.server 8000
+npm run serve
+# Open http://localhost:8000
 ```
 
-Visit http://localhost:8000. No install or build step is required. Every texture is painted at runtime on Canvas 2D: `cavern-art.js` draws the rock, strata, gold veins, and lantern light, and `game.js` draws the rig, objects, and effects. No external assets are downloaded, and the UI uses system fonts (Georgia/Arial) so it works fully offline.
+Alternatively: `python3 -m http.server 8000`. No install or production build is needed. Serve the directory rather than opening `index.html` through `file://`, which has inconsistent storage behavior.
 
 ## Controls
 
-- **Down arrow / Space / Drop hook / tap the mine:** launch the automatically swinging hook.
-- **D / Dynamite:** destroy the object currently being reeled in. Requires a purchased charge.
-- **Magnetic claw:** click its button below the mine to arm it while the claw is swinging, then launch. That launch grabs small, medium, and large gold from up to 24 pixels further away and consumes the charge.
-- **Diamond book / Strength drink:** the field buttons show what you carry. Clicking the book reveals every treasure's payout for six seconds; the 1.5× diamond bonus and the doubled pulling speed apply for the whole mine without any click.
-- **P / Escape / Pause:** pause or resume. Switching browser tabs automatically pauses.
-- **Sound:** enable optional synthesized effects.
+- **Down / Space / tap the field:** launch the automatically swinging claw. Wait until it returns before launching again.
+- **D / dynamite button:** destroy your current catch without scoring. Requires a charge.
+- **P / Escape / pause button:** pause or resume. Switching away from the tab also pauses.
+- **Settings:** stop the clock while you change sound, music, shake/vibration, or art. Closing settings resumes only if settings paused an active game; after switching tabs, the expedition remains paused.
+- **Diamond book / Values button:** reveal treasure payouts for six seconds. Its diamond bonus is automatic; pressing the button is not required to activate it.
+- **Magnetic claw:** arm while the claw is swinging, then launch. It widens gold capture by 24 field units for one launch and consumes the upgrade. Press again before launching to stow it.
+- **Strength drink:** its pulling-speed bonus is automatic for the current mine; the field button explains the effect.
 
-Every mine has a 60-second limit. Only treasure returned to the winch before time expires counts. Larger gold and rocks take longer to retrieve. Clearing every object also ends the round.
+Only treasure returned to the winch before time expires scores. Gold and rocks drag the reel; diamonds are light and valuable. Clear every object to end a round early. Meet the target to proceed; miss it to retry the same seeded mine. Retry restores the mine's starting cash but does not refund consumed dynamite or magnetic claws.
 
-**TNT barrels:** red barrels marked TNT, each with a lit fuse, are scattered among the treasure. Mines 1–4 contain one; another is added every four mines, up to six. Touching a barrel with the hook detonates it underground immediately and returns the hook empty. Each explosion destroys objects touching its 120-pixel blast radius, including gold, rocks, gems, diamonds, and mystery bags. Nearby TNT triggers chain reactions. Destroyed items award no points; banked money and purchased dynamite are unaffected.
+Keyboard focus stays inside the active dialog. Gameplay shortcuts do not interfere with settings controls. Touch buttons are at least 44×44 CSS pixels. The playable field uses one uniform scale, so resizing does not change collision, spacing, blast distances, or saved positions. Art fills the surrounding viewport. Stationary targets stay clear of the score plaque and gear controls. Landscape provides larger targets on phones; portrait still shows the whole field. Value labels and score popups retain a readable minimum font size; revealed prices avoid overlap and use leaders to identify their treasure.
 
-**Pigs:** animated pigs patrol horizontally at a fixed depth, turn at the mine edges, and stop moving when hooked. Regular pigs move at 65 pixels/second, pull as quickly as diamonds, and pay just $10—even in deeper mines. Patrol counts are rolled per mine: 0–1 pig in mines 1–5, 0–2 in mines 6–10, and 0–3 from mine 11 on. The roll is seeded by the mine, so a level always loads the same guard detail.
+Your device's **reduced-motion preference** disables shake and vibration, freezes clouds, birds, water drips, and decorative glints, reduces particles/flashes, and removes score tweens. The shake slider also controls vibration intensity. Music is optional, independent of sound effects, and disabled by default. A saved music preference starts playback on the next New game or Resume gesture, respecting browser autoplay restrictions.
 
-**Diamond-mouth pigs:** from mine 10, a faster pig (150 pixels/second) carries a visible sparkling diamond, with 0–1 per mine; from mine 20, 0–2. Each pays $10 plus the current mine's full diamond value. The diamond book adds 50% to only the diamond portion, rounded to whole dollars. TNT destroys either pig without awarding points. Patrols freeze while paused and restore from the saved timer; existing treasure and barrel IDs are preserved.
+## Visual presentation
 
-Your available money must meet the level goal. On success, that goal is deducted; the surplus carries into the shop and counts toward the next goal. Shop purchases spend that surplus. Prices scale with the upcoming mine's goal (see Economy below). Dynamite persists until used, with purchases limited to three held charges; strength drinks (double retrieval speed) and diamond books (1.5× diamond value) last for the next mine. Retry restores the current mine and its starting cash, without refunding dynamite already used.
+The prospector has local painted **normal, pulling, surprised, happy, and worried** expressions, shared by the actual gantry operator and welcome/result illustrations, with cached procedural fallback. Gameplay has only one operator—no duplicate floating close-up or caption plaque. Textured ore, emeralds, sacks, pigs and machinery share the environments' material direction. Pigs become wide-eyed when caught. A compact shaded-brass HUD shows haul, target progress and time, with separate 44-pixel controls and four tool slots.
+
+Earned catches drive impact rings, a short claw trail, readable reward popups, warm environmental pulses, and a cart that fills from the actual haul. There are no visual-only multipliers or invented rewards. Trails/rings expire even while paused and are disabled for reduced motion; decorative dust/pollen freezes too. Shop cards adapt to narrow phones and short landscape screens; names/descriptions replace large tool illustrations when space is tight.
+
+`Constants.js` centralizes Canvas visual timing, palettes, scenery, size/count caps, and responsive tuning; `style.css` owns the native UI material variables. `scene-assets.js` loads 17 local WebP assets (~2.37 MB total) once; backgrounds are cached, and sprite images are reused. PNGs in `assets/aaa/` are editable generation sources, not requested at runtime. Daylight sky/earth use separate depth planes so a tall portrait sky does not magnify the soil. `EventBus.js` uses native `EventTarget` signals (`ENTRANCE`, `CATCH`, `REWARD`, `BLAST`, `RESULT`); `prospector-art.js` shares the character artwork. These effects are ephemeral and never enter saved progress or collision calculations. The HUD and modal scrollports reserve the top **8%** of the viewport for clear composition—not an integration with an external widget.
+
+## Economy and difficulty
+
+A completed mine's target is deducted from your available money. Only the surplus carries into the shop; purchases spend that surplus, and unspent cash counts toward the next target. Keeping cash is a valid alternative to buying gear.
+
+Targets follow five-mine recovery/build/challenge cycles, not a strictly increasing table. With zero-based mine index `i`:
+
+```text
+baseline = 550 + 4200 × (1 − exp(−i / 35))
+rhythm   = [0.94, 0.98, 1.02, 1.06, 1.12][i % 5]
+target   = round(baseline × rhythm / 25) × 25
+```
+
+Examples: mine 1 **$525**, mine 5 **$1,125**, mine 6 **$1,050**, mine 10 **$1,675**, and mine 100 **$5,050**. Check the in-game HUD and shop for the authoritative target.
+
+New games use layout version 3. Gold-heavy and gem-heavy maps alternate, with more blocking rocks and moving targets in later bands. Stationary treasure is normalized to a fixed budget: the required share rises from roughly 58% in the opening mine toward roughly 81% in the finale, varying with each five-mine cycle. This is a value budget, **not proof that every route is equally easy within a minute**. Values are rounded to whole dollars after normalization.
+
+| Treasure | Pre-scaling value | Pulling weight |
+| --- | ---: | ---: |
+| Small gold | 100 | 1.1 |
+| Medium gold | 350 | 2.3 |
+| Large gold | 900 | 4.4 |
+| Diamond | 600 | 0.8 |
+| Gem | 300 | 1.0 |
+| Mystery bag | Seeded 75–625 | 1.05 |
+| Rock | Flat $20, not scaled | 3.8 |
+
+### Hazards
+
+- **TNT:** touching a barrel detonates it underground, returns an empty claw, and destroys objects touching its 120-field-unit blast radius. Nearby barrels chain-react; destroyed treasure earns nothing. New layouts introduce TNT at mine 4, with a second barrel attempted on five-mine finales from mine 15. Safe placement can omit a hazard if no suitable position is found.
+- **Pigs:** from mine 11, new layouts attempt one ordinary pig and one diamond-bearing pig. They patrol horizontally at 65 and 150 field units/second respectively, freeze while paused, and stop moving when caught. Ordinary pigs pay a flat $25. Diamond-bearing pigs pay $25 plus a scaled diamond portion; a book multiplies only that portion. Moving rewards are extra, not part of the stationary treasure budget.
+
+Older saved layouts retain their historical hazard rules, object IDs, and placements.
+
+### Supplies
+
+Prices use the **upcoming** mine's target, rounded upward to $25 steps, with these minimums:
+
+| Supply | Price | Effect / limit |
+| --- | --- | --- |
+| Dynamite | 5% of target, at least $100 | Destroy a catch; carry at most 3 purchased charges |
+| Strength drink | 12%, at least $150 | 1.5× pulling speed for the next mine |
+| Diamond book | 12%, at least $150 | 1.5× diamond value for the next mine; reveal values on demand |
+| Magnetic claw | 6%, at least $75 | Carry one; widen gold capture for one armed launch |
+
+Dynamite and unspent magnetic claws carry forward. Strength and books expire after a successful mine. Legacy dynamite packs above three remain usable but cannot buy more until below the cap.
 
 ## Saved progress
 
-Dexie 4.0.11 is bundled locally in `vendor/` with its Apache-2.0 license; saving does not require a CDN or account. One expedition is stored in the `GoldMining` IndexedDB database.
+Dexie 4.0.11 is bundled in `vendor/` with its Apache-2.0 license. One expedition lives in the `GoldMining` IndexedDB database.
 
-- Autosaves every second during play, after treasure delivery, purchases, dynamite use, level transitions, and pause/resume.
-- Restores the mine, collected objects, in-flight hook/catch, remaining time, money, supplies (including a packed magnetic claw and whether it was armed), and sound preference. Reloaded active games open paused; shop, loss, and victory screens reopen as they were.
-- Starting a new expedition after victory replaces the previous save.
-- Hiding or leaving the page attempts a final save. Abrupt termination can lose progress since the last completed write; browser shutdown writes are not guaranteed.
-- Saves belong to this browser profile and site origin (including port). Clearing site data deletes them; private browsing may discard them. Use one game tab at a time; simultaneous tabs can overwrite each other’s progress.
-- If storage is unavailable or save data is invalid, a warning appears and gameplay remains available. Existing invalid data is not overwritten. Clear this site's IndexedDB data to reset it.
-
-Direct `file://` storage behavior varies between browsers. Prefer the local server above.
-
-## The expedition
-
-| Mine | Name | Goal |
-| --- | --- | ---: |
-| 1 | Sunset Creek | $600 |
-| 2 | Copper Hollow | $675 |
-| 3 | Old Pine Quarry | $750 |
-| 4 | Emerald Basin | $850 |
-| 5 | Dusty Ridge | $950 |
-| 6 | Moonstone Cavern | $1,050 |
-| 7 | Diamond Gulch | $1,150 |
-| 8 | Lost Prospector | $1,250 |
-| 9 | Kings beneath the Hill | $1,350 |
-| 10 | The Golden Heart | $1,450 |
-| 11 | Amber Crossing | $1,550 |
-| 12 | Silverroot Tunnel | $1,650 |
-| 13 | Jade Falls | $1,775 |
-| 14 | Crimson Chasm | $1,900 |
-| 15 | Sapphire Springs | $2,025 |
-| 16 | Obsidian Reach | $2,150 |
-| 17 | Opal Observatory | $2,275 |
-| 18 | Thunderstone Pit | $2,400 |
-| 19 | Frostbite Vein | $2,525 |
-| 20 | The Sunken Treasury | $2,650 |
-| 21 | Dragonbone Depths | $2,775 |
-| 22 | Starlight Shaft | $2,900 |
-| 23 | Royal Amethyst | $3,025 |
-| 24 | Emberfall Mine | $3,150 |
-| 25 | Crystal Labyrinth | $3,275 |
-| 26 | The Forgotten Vault | $3,400 |
-| 27 | Phoenix Hollow | $3,525 |
-| 28 | Celestial Quarry | $3,650 |
-| 29 | Midas Descent | $3,775 |
-| 30 | The Eternal Fortune | $3,900 |
-| 31 | Aurora Passage | $4,050 |
-| 32 | Garnet Gorge | $4,200 |
-| 33 | The Brass Citadel | $4,350 |
-| 34 | Silversong Cavern | $4,500 |
-| 35 | Ruby Eclipse | $4,650 |
-| 36 | Titanstone Tunnel | $4,800 |
-| 37 | The Hidden Dynasty | $4,950 |
-| 38 | Prismatic Depths | $5,100 |
-| 39 | Cinder Crown | $5,250 |
-| 40 | The Platinum Gate | $5,400 |
-| 41 | Astral Rift | $5,550 |
-| 42 | Black Pearl Basin | $5,700 |
-| 43 | The Gilded Abyss | $5,850 |
-| 44 | Diamond Tempest | $6,000 |
-| 45 | Sovereign Shaft | $6,150 |
-| 46 | The Ancient Hoard | $6,300 |
-| 47 | Infinity Vein | $6,450 |
-| 48 | Dawnfire Vault | $6,600 |
-| 49 | The Last Bonanza | $6,750 |
-| 50 | Crown of the Earth | $6,900 |
-| 51 | Beyond the Crown | $7,050 |
-| 52 | Topaz Terrace | $7,200 |
-| 53 | Whispering Granite | $7,350 |
-| 54 | The Jade Stairway | $7,500 |
-| 55 | Mercury Hollow | $7,650 |
-| 56 | Scarlet Geode | $7,800 |
-| 57 | The Buried Beacon | $7,950 |
-| 58 | Lapis Landing | $8,100 |
-| 59 | Stormglass Cavern | $8,250 |
-| 60 | The Sapphire Throne | $8,400 |
-| 61 | Quartz Frontier | $8,550 |
-| 62 | Verdant Fault | $8,700 |
-| 63 | The Bronze Cathedral | $8,850 |
-| 64 | Moonfire Basin | $9,000 |
-| 65 | Tourmaline Trail | $9,150 |
-| 66 | The Silent Foundry | $9,300 |
-| 67 | Sunstone Summit | $9,450 |
-| 68 | Echoing Onyx | $9,600 |
-| 69 | The Hidden Horizon | $9,750 |
-| 70 | Treasury of Tides | $9,900 |
-| 71 | Peridot Passage | $10,050 |
-| 72 | The Copper Constellation | $10,200 |
-| 73 | Fallen Star Quarry | $10,350 |
-| 74 | Rosegold Ravine | $10,500 |
-| 75 | The Marble Monolith | $10,650 |
-| 76 | Twilight Agate | $10,800 |
-| 77 | The Hollow Mountain | $10,950 |
-| 78 | Golden Mirage | $11,100 |
-| 79 | The Velvet Vein | $11,250 |
-| 80 | Citadel of Crystals | $11,400 |
-| 81 | The Deepward Road | $11,550 |
-| 82 | Cobalt Cathedral | $11,700 |
-| 83 | The Emerald Engine | $11,850 |
-| 84 | Radiant Ruins | $12,000 |
-| 85 | The Diamond Delta | $12,150 |
-| 86 | Fireopal Fortress | $12,300 |
-| 87 | The Argent Archive | $12,450 |
-| 88 | Midnight Malachite | $12,600 |
-| 89 | The Splintered Sun | $12,750 |
-| 90 | Palace of Pyrite | $12,900 |
-| 91 | The Worldroot Well | $13,050 |
-| 92 | Heavenstone Hollow | $13,200 |
-| 93 | The Ruby Reliquary | $13,350 |
-| 94 | Everglow Excavation | $13,500 |
-| 95 | The Sovereign Seam | $13,650 |
-| 96 | Stardust Sanctuary | $13,800 |
-| 97 | The Boundless Bonanza | $13,950 |
-| 98 | Fortune’s Final Frontier | $14,100 |
-| 99 | The Hundredth Door | $14,250 |
-| 100 | Heart of a Hundred Mines | $14,400 |
-
-Maps use distinct fixed seeds, with additional valuables and rocks through mine 10. Mines 11–100 retain mine 10's treasure and rock counts to avoid crowding. The 60-second limit and listed goals remain unchanged.
-
-## Economy and risk versus reward
-
-- **Goal coverage:** stationary treasure is valued so the goal requires 26% of its total in mine 1, 36% by mine 15, 46% by mine 50, and 52% from mine 100 on. That supplies roughly 3.85× the opening goal and 1.92× late goals, allowing missed catches and some TNT losses without requiring a perfect clear. Goals themselves rise gently, from $600 to $14,400 across the 100 mines. This is a value budget, not a guarantee that every layout is equally accessible in 60 seconds.
-- **Treasure roles:** pre-scaling value weights are small gold 175 (pulled at weight 1), medium gold 450 (2), large gold 950 (3.6), diamonds 650 (0.8), and gems 325 (0.9). Large gold pays more per catch but retrieves slowly; small diamonds offer fast returns at the cost of harder aiming. The winch now ramps up to speed over roughly a quarter second instead of snapping there, so a heavy catch feels like it drags the reel down. Actual payouts are scaled to the mine's budget and rounded to whole dollars.
-- **Mystery bags:** seeded weights range from 100–700 in steps of 100 before the same scaling. They offer uncertain upside, rather than routinely outpaying a diamond. Normalization prevents a poor bag roll from reducing the mine's total treasure budget.
-- **Hazards and optional rewards:** rocks stay $15, regular pigs $10, and TNT $0. Diamond-mouth pigs pay the scaled diamond value plus $10, but are excluded from the stationary budget: moving targets offer surplus rather than being required by the budget. More hazards in later mines make protecting treasure and choosing a clear hook path matter.
-- **Upgrade opportunity cost:** dynamite costs 3.5% of the next goal (minimum $100), strength 12% (minimum $200), the diamond book 18% (minimum $300), and the magnetic claw 7% (minimum $150), rounded upward to $25 steps. Strength rewards heavy-gold routes; the book gives 50% extra diamond value and rewards multiple precision catches instead of tripling easy late-game money. The claw converts one launch into a wider grab, which pays off when gold sits just past the claw's reach. Keeping cash remains a valid choice.
-- **Stockpiling:** at most three dynamite charges may be held when buying; charges still persist across mines. Only one magnetic claw can be carried, and launching consumes it, so it is a per-mine decision rather than an inventory. Legacy saves above the dynamite cap keep their inventory but cannot buy more until below three.
-- **Save compatibility:** layouts, IDs, collected/destroyed state, bank, and already-earned haul are preserved. On reload, remaining treasure (including an in-flight catch) uses the revised payouts, and owned books use the revised 1.5× effect; no currency is retroactively removed.
-
-Existing treasure layouts and object IDs remain unchanged for saved-game compatibility; TNT barrels are appended to each map. Destroyed objects and detonated barrels use the existing saved removal state. Patrol counts and positions are now rolled per mine, so a save written by an earlier build can fail validation and is left untouched rather than rewritten. Old level-10, level-30, and level-50 victory saves open the shop for mine 11, mine 31, and mine 51 respectively, preserving surplus without deducting the completed goal again.
+- Autosaves every second during play and after catches, purchases, gear use, pause/resume, and transitions. Writes are serialized so an older snapshot cannot overwrite a newer one.
+- Restores the mine, removed objects, in-flight hook/catch, timer, cash, gear, and expedition sound preference. Active games reopen paused; shops, losses, and victory screens restore their corresponding state.
+- Art, music, and shake preferences use localStorage. **Classic** is the default when no valid art preference exists. Explicit Classic/Cavern/Sky choices persist; a saved `classic` now selects the new Classic provider rather than being redirected to Sky. Existing Sky and Cavern preferences are not overwritten.
+- Legacy map versions 1 and 2 remain accepted. Historical mine-10/30/50 victory saves reopen the next shop without deducting the completed target again.
+- Starting a new expedition explicitly replaces the previous save. Invalid saves are rejected without being rewritten by Continue.
+- Saves belong to the browser profile and site origin, including port. Clearing site data deletes them; private browsing may discard them. Use one game tab at a time—simultaneous tabs can overwrite progress.
+- Storage errors produce a warning, not a gameplay lock. Page hide attempts a final save, but abrupt termination or browser shutdown may lose the latest unfinished write.
 
 ## Verification
 
-Completed checks:
+```sh
+npm run check      # JavaScript syntax; no dependencies
+npm run smoke      # Real browser integration checks; Node 22+ and Chrome/Chromium
+```
 
-- Full-viewport shell UI: `node --check game.js` passed. The page is now a single `#game-shell` filling the viewport (flex column: dashboard, mine, controls); the topbar, intro, field-guide, and footer were removed, and the fullscreen button and its Fullscreen API wiring were removed with it. The sound toggle lives in the dashboard beside Pause. `updateHUD` no longer writes to the removed level/summary elements. Headless Chromium checks at 1280×800, 1100×580, and 390×720 confirmed the shell fills the viewport exactly, playthrough works, and there are no console errors at ~60fps.
-- Canvas presentation pass: procedural lumpy nugget/boulder silhouettes with seeded facets, stone fissures on rocks, twinkling facet glints on gold, and lantern-side gradient rim lighting on gold and rock outlines. Verified live via headless screenshots (light, glow, chain tension, catch popups, gold-dust bursts, screen shake) with no page errors.
+The browser check uses Node's standard library and Chromium's DevTools protocol. It starts an ephemeral localhost server and an isolated temporary browser profile, then cleans both up. It does not touch your normal browser saves. Set `CHROME_BIN` if your browser is installed in a nonstandard location:
 
-- Cavern art module: the generic rock face, strata, gold veins, lantern halo/beam, and per-object stone surfaces moved into the new `cavern-art.js` (`paintBackground`, `paintLight`, `surface`), and the quarter-res bloom pass was deleted. `node --check game.js`, `node --check cavern-art.js`, and `git diff --check` passed. Headless Chromium runs covering the shop, arming and firing the claw, dynamite use, a mid-mine reload, and a 390×844 portrait load reported no page or console errors and no horizontal overflow; in portrait the field is reprojected rather than cropped, and the HUD hint no longer collides with the location label.
-- Economy retune: goals now run $600 to $14,400 and stationary treasure covers 26% / 36% / 46% / 52% of a mine's budget at mines 1 / 15 / 50 / 100, which is 3.85×, 2.78×, 2.17×, and 1.92× the goal. Verified by re-deriving the level table and `targetShare` from `game.js`: 100 monotonic goals matching the table above and the stated coverage at those four mines. The 90/100 bot result listed above predates this retune and has not been re-measured.
-- Magnetic claw: a live headless run bought dynamite and the claw in the shop, armed the claw in the field, launched (the charge was consumed and the button returned to 0 and disabled), and spent dynamite on a catch with the expected count; no console errors. A pre-magnet save injected into IndexedDB still loads, restoring bank, haul, and timer into the paused dialog with no storage warning. The wider grab radius and the arm glow are captured in screenshots but were not measured in play.
-- Patrol rolls: `makeMap` extracted from `game.js` and run over all 100 mines (`.dream-loop/pigs.mjs`) — every map places identically on repeat calls, pig counts stay within 0–1 / 0–2 / 0–3 by tier, no diamond pig appears before mine 10, diamond pigs stay within 0–1 / 0–2, TNT counts match the unchanged formula, and no hazard overlaps treasure or leaves the bounds. Counts spread across 0/1/2/3 pigs as 28/27/20/25 levels and 0/1/2 diamond pigs as 38/37/25 levels, with speeds 65 and 150 pixels/second. Patrolling movement and the faster interception in play remain unverified.
+```sh
+CHROME_BIN=/path/to/chromium npm run smoke
+SMOKE_SHOTS=/tmp/goldmining-shots npm run smoke  # Optional screenshots
+```
 
-- Economy: `node --check game.js` and `git diff --check` passed. A temporary Node VM comparison verified all 100 deterministic treasure budgets, value roles, integer rewards, diamond-pig payouts, monotonic shop prices, actual purchase deductions, invalid/duplicate/unaffordable purchase rejection, pack limits, revised book scoring, and legacy save acceptance. All 100 layouts, IDs, and radii matched the pre-balance version.
-- A simple ray-aiming bot starting each mine with zero bank and no upgrades won 90/100 before and after tuning; all first 20 mines passed after tuning. Remaining failures were mines 23, 25, 35, 57, 75, 79, 82, 84, 85, and 88. This smoke simulation is not a human difficulty benchmark or proof of universal winnability; those layouts need focused playtesting.
+The smoke server injects controlled scenarios into its **in-memory** copy of `game.js`; those mutation helpers are never shipped in the game. Checks cover boot, timer formatting, exact scores, three retries, modal clock/input/focus, reduced motion, HUD cadence, a real isolated diamond launch, catch save/reload, synthesized effects and saved music startup, TNT chains, gear consumption, upgraded payouts, purchases, transitions, all 100 deterministic maps, real touch input, all three art styles at phone/landscape/ultrawide sizes, readable non-overlapping value labels, HUD clearance across all 100 maps at each viewport, moving pig label bounds, legacy saves/art preferences, and final victory/restart. Additional visual checks cover painted opening artwork, real catch/reward expression changes, exact result-card figures, capped/expiring/reduced-motion effects, actual rendered cart filling, the top-eight-percent inset, character/treasure clearance, and desktop/small-phone shop actions without scrolling. Classic checks also verify fresh/invalid preference defaults, persistence of every theme, distinct rendered backgrounds, and unchanged catch/cash/object state while switching styles. Screenshots support manual visual review; they are not golden-image regression assertions.
 
-- Pigs: syntax and whitespace checks passed. A temporary Node VM check passed across all 100 maps for deterministic spawning, expected pig counts, initial non-overlap, scaled diamond rewards, horizontal bounds/reversal and fixed depth, timer-based position restoration, pause, capture/retrieval, diamond-book scoring, TNT destruction, and legacy save validation. Actual browser animation and persistent reload remain unverified. This covers the pre-roll counts, not the randomised patrols below.
+`window.render_game_to_text()` returns valid JSON with phase/modal, art, cash/target/timer, field-to-viewport transform, hook/catch, supplies, and object positions/removal state. Coordinates are field units, top-left origin, x right and y down. It is read-only and does not expose progress mutation.
 
-- TNT: `node --check game.js` and `git diff --check` passed. A temporary Node VM check passed for all 100 deterministic, non-overlapping maps and expected barrel counts; hook-triggered detonation, three-barrel chains, nearby treasure destruction, outside-radius survival, empty-hook return state, and unchanged money/dynamite. Browser visuals and TNT save/reload remain unverified.
+### Completion notes — 2026-10-02
 
-- `node --check game.js` passed.
-- A headless Node VM check with DOM/Canvas stubs passed: all ten maps have non-overlapping treasure and enough available value; hook collision/retrieval, scoring, surplus, shop deductions, duplicate-purchase protection, timeout/retry, and final victory work.
-- Save/load checks passed using the bundled Dexie with an in-memory IndexedDB implementation: mid-catch reload, paused timer, scoring after resume, shop purchases, next-mine restoration, loss/retry, victory/restart, invalid-data rejection, and storage-unavailable fallback. Verification dependencies were installed only in a temporary directory.
-- The 100-mine expansion passed syntax and headless checks for unique names, deterministic, non-overlapping, in-bounds maps with sufficient treasure and increasing goals; all 100 level transitions and saves; legacy level-10/30/50 victory migration; and level-100 HUD, victory restoration/restart.
-- Actual browser rendering, persistent storage across browser restarts, touch interaction, audio, and difficulty balance remain unverified.
+- `npm run check`, `git diff --check`, and all **29 browser smoke checks** passed on macOS Chrome with Node 26.8.2; no runtime/storage errors were reported.
+- A separate read-only comparison against the original game verified all **300 maps** (100 mines × layout versions 1–3), including IDs, positions, radii, values, weights, and targets. The Sky rename and then-current Classic→Sky migration were preserved in that pass; the migration is superseded by the new Classic provider below.
+- Reviewed screenshots for both themes at 320×568, 393×851, 844×390, and 2560×850. No build step, dependencies, or game engine were added.
+- Physical-device touch/vibration, audible mixing, Safari/Firefox behavior, storage-denied operation, and human difficulty acceptance remain manual. No Play.fun integration or nonvisual gameplay was added.
 
-Manual browser checklist:
+### Visual-pass completion notes — 2026-10-02
 
-- Start a mine; verify the hook swings without directional input.
-- Drop using the keyboard, button, and touchscreen; verify repeated drops cannot interrupt a retrieval.
-- Compare a rock's slow return with a diamond's quick return.
-- Pause/resume and switch tabs; confirm the countdown is preserved.
-- Let time expire below the goal; retry the same map with starting cash restored.
-- Meet the goal and finish the round; confirm only surplus remains in the shop.
-- Buy each supply; confirm displayed prices match deductions and grow with the next goal, with disabled unaffordable/duplicate purchases and correct next-mine effects. Verify a fourth dynamite purchase is blocked.
-- Play mines 1, 10, 20, 50, and 100 with no upgrades; compare heavy-gold and precision-diamond strategies, then repeat with strength or a book and assess whether the purchase earns back its cost.
-- Focus playtests on mines 23, 25, 35, 57, 75, 79, 82, 84, 85, and 88; assess clear hook routes, pig interference, TNT losses, and whether the 60-second target is fair.
-- Buy the magnetic claw; arm it and confirm the button lights up, that launching consumes it, and that gold just outside normal reach is pulled in.
-- Click the diamond book in the field; confirm payouts appear above each object for six seconds and fade out.
-- Load the mine on a tall phone; confirm the whole field is visible without cropping and the claw grabs what it appears to touch.
-- Use dynamite on a rock; confirm no score is awarded and one charge is consumed.
-- Touch a TNT barrel at its edge/corner; confirm immediate underground explosion, visible debris, empty-hook return, and no points or dynamite charge used.
-- Detonate nearby barrels; confirm the chain destroys adjacent gold, rocks, diamonds, gems, and bags but leaves distant objects intact.
-- Reload after a blast; confirm destroyed treasure/barrels stay gone and the hook resumes empty.
-- Destroy the last objects with TNT; confirm the round ends when the empty hook returns.
-- Compare early and later mines; confirm barrel counts increase from one to six and treasure remains reachable.
-- Watch pigs run and turn at the edges at a fixed depth; pause/resume and reload to check patrol restoration. Confirm the mix varies between neighbouring mines.
-- Hook a regular pig, including while it crosses in front of treasure; verify fast retrieval, stopped running, and exactly $10 awarded.
-- In mine 10 or later, catch a faster diamond-mouth pig; verify the diamond value plus $10 and that it outruns the plain pigs. With a diamond book, only the diamond portion gains 50%, rounded to whole dollars.
-- Reload with a pig on the hook; verify it stays caught and pays once after retrieval. Detonate TNT beside pigs; verify they disappear without points.
-- Complete mines 10, 30, and 50 and continue to mines 11, 31, and 51; complete mine 100 and start a fresh expedition.
-- Load old level-10, level-30, and level-50 victory saves; confirm the shop opens with the same surplus.
-- Check mobile portrait layout, keyboard focus, dialog focus containment, and sound toggle.
-- Reload while retrieving treasure; confirm the same catch, money, and remaining time restore paused.
-- Buy supplies and reload in the shop; confirm purchases and deductions persist without duplication.
-- Close and reopen the browser on the same origin; resume the saved expedition.
-- Block IndexedDB; confirm the warning appears and the game still runs.
+- Approved visual-only direction: stronger prospector/entrance, earned rewards, distinct result cards, compact shop, smooth entry transitions, larger labels, and safe UI inset. Preserved gameplay parameters, scoring/conditions, controls, save schema, and seeded generation.
+- Before/after: tiny/static miner → expressive procedural portraits; tiny rewards → screen-readable popups/trails/rings; always-full cart → actual haul loading; paragraph-only result → explicit earned/target/shortfall cards; scrolling shop → compact responsive cards; edge-hugging HUD → top-eight-percent inset.
+- Validation: JavaScript syntax, whitespace, **36 Chrome smoke checks**, and both themes at 320×568, 393×851, 844×390, and 2560×850. Browser checks include every mine's treasure clearance from the HUD and decorative portrait. Visual captures are in `/tmp/goldmining-visual-audit` (before) and `/tmp/goldmining-visual-after` (after).
+- No new dependencies, external assets, physics/scoring changes, or commits. Self-reviewed; no independent reviewer tool is available. Physical-device/Safari/Firefox/audio/balance acceptance remains pending. Silent-clip conversion is a human design judgment, not proven by browser checks.
 
-The graphics use native Canvas 2D, with all cavern rock, light, and object surfaces generated procedurally in `cavern-art.js` and no downloaded assets. UI, controls, and shop use semantic HTML. The page renders as one full-viewport game shell (dashboard HUD above the canvas, action controls below); there is no separate topbar, intro, field-guide, footer, or fullscreen mode. In portrait viewports the field keeps every object in frame by reprojecting it vertically instead of cropping. The spatial aiming playfield is visual; a nonvisual gameplay mode is not included.
+### Classic-theme completion notes — 2026-10-03
+
+- Added `classic-art.js` and wired its script/provider/default/picker in `index.html` and `game.js`. Classic is original procedural artwork: pastel blue sky, simple drifting clouds, quiet earthen bands, bold outlined gold/rocks, and flat cream/brown controls. No original-game assets, copied sprites, or traced image paths were used. The supplied Fandom reference returned HTTP 403; this is an inspired look, not a claimed pixel replica.
+- Supporting changes: Classic scenery/ore/character palettes in `Constants.js`, shared daylight controls and Classic overrides in `style.css`, syntax/server/coverage updates in `package.json` and `smoke-check.cjs`, and this README. The existing Sky/Cavern providers and character-expression code were reused without modification.
+- Classic is the fresh-profile and invalid-preference fallback. Saved Classic now resolves to Classic; valid Sky/Cavern preferences remain respected. Maps, scoring, controls, collisions, timing, saves and reduced-motion behavior are unchanged.
+- Screenshot self-review caught a fixture clicking the inert HUD behind a modal; fixed it to switch only through an actually open settings dialog and assert the selected theme. A focused browser probe then reproduced small-phone settings horizontal overflow (311px scroll width in a 305px scrollport); flexible panel/range minimum widths fixed it. All three themes now check actual settings width and small-phone shop action visibility.
+- Verification: syntax and whitespace checks; **44 Chrome smoke checks**, including all three themes at 320×568, 393×851, 844×390, and 2560×850, plus 100-map HUD/portrait clearance at each combination. Captures: `/tmp/goldmining-classic`. No runtime/storage warnings, dependencies, external art assets, or commits. Physical-device/cross-browser/audio/balance acceptance remains manual.
+
+### Dream Loop completion notes — 2026-10-04
+
+- Generated a target from the current game screenshot using the Codex subscription image route. Three inline visual rounds (no subagent tool available): crafted UI, themed scenery, then responsive comparison and refinement. The target is visual direction, not a claimed pixel-perfect replica.
+- `index.html` / `game.js` / `style.css`: rounded expedition instruments, consistent SVG pause/settings/hourglass icons, four-slot inventory without an empty placeholder, clearer tool silhouettes, character-caption plaques, location pills, target-met color and accessible monetary progress, compact welcome navigation, and explicit cash/next-target shop summaries.
+- `classic-art.js`: pastel sun, layered sage hills, scrub, roots, continuous ochre seams and soft cutaway edges. `sky-art.js`: distant supply shack, rail fence and ridge haze. `cavern-art.js`: cool recesses, muted mineral seams/clusters and a still reflective floor accent. Cloud layers fill portrait/ultrawide scenery as well as the aiming field. All scenery remains procedural and decorative.
+- Screenshot review and focused measurements reproduced cramped portrait room, a 552px desktop shop in a 533px scrollport, and 548px landscape settings in a 358px scrollport. Corrected actual caption-space accounting, HUD spacing, inherited shop line heights and compact three-theme settings chips/two-column landscape settings. Desktop, small-phone and landscape settings/shop controls now fit without scrolling. Browser fixtures wait for resize before clicking/measuring the HUD and clean up failed modal checks.
+- Verification: JavaScript syntax, whitespace, and **48 Chrome smoke checks**, including all three themes at four viewport sizes, every mine's treasure/HUD clearance, accessible target state, welcome fit, responsive settings fit and shop primary-action visibility. Focused captures additionally cover opening/gameplay/results at five sizes and target-sized comparisons; no runtime/storage warnings. Generated target, baselines, round captures, probes and completion context live in ignored `.dream-loop/`.
+- Physics, prices, scoring, controls, map generation and save schema are unchanged. No dependencies, shipped bitmap assets or commits. Self-reviewed only; physical-device, Safari/Firefox, audio and balance acceptance remain manual.
+
+### Cinematic Dream Loop completion notes — 2026-10-04
+
+- This revision supersedes the previous procedural-only presentation above. Locked a new Cavern target at **03:31:39 UTC**, deadline **04:31:39 UTC**. Three inline rounds: authored scenes/character/compact UI; remaining material props/machinery and portrait texture refinement; actual three-theme comparisons, responsive dialog review, and final verification. No subagent tool was available; self-review only.
+- Refreshed `game.js`, `index.html`, `style.css`, all three art providers, shared character/constants, and new `scene-assets.js`/`assets/aaa/`. Classic has dry prairie/copper earth, not alpine mountains or forest. Cavern has atmospheric blue/amber depths; Sky has alpine geology. Generated local art is visual direction, not a pixel-perfect target claim. Procedural providers and character remain graceful fallbacks; no runtime image-generation/network service is needed.
+- Fresh **50 Chrome smoke checks**, JavaScript syntax, and whitespace checks passed at **04:23:35 UTC**, with no runtime/storage warnings. New checks cover decoded transparent sprites, <=82px HUD, no duplicate gameplay portrait, and all image requests deliberately blocked: three distinct procedural themes and working hook controls remain. Existing map/save/catch/score/economy/focus/reduced-motion regressions remain green.
+- Separate actual settings/shop captures and no-scroll measurements pass for all themes at 1100×580, 844×390, 320×568 and 393×851. Reviewed target-size gameplay for every theme, narrow-phone gameplay/shop and landscape settings. Exact source comparisons against the start-of-loop backup confirm `makeMap`, `validSave`, `saveProgress`, `drop`, `update`, `finishLevel` and `detonate` blocks are unchanged.
+- Ignored artifacts: `.dream-loop/aaa/baseline`, `before`, `round-1`, `round-2`, `round-3`, `verified`, and logs/context. No dependencies, physics/prices/scoring/control/map/save-schema changes, resets or commits. Physical-device, Safari/Firefox, audio and human balance acceptance remain pending.
+
+### Hook connection completion notes — 2026-10-04
+
+- `game.js` / `Constants.js`: replaced oversized segmented links with a continuous shaded steel cable. It leaves the fixed swing pivot through a catwalk opening and ends on the rotated claw eye. A feed guide and belt-driven side crank connect the winch to the miner; the live hand stays on the handle instead of adding a disconnected arm over the painted glove.
+- `smoke-check.cjs`: a failing-before-fix browser regression now checks cable/eye and hand/crank attachment during swing, drop and loaded reeling across all three themes, desktop, portrait and landscape; procedural fallback attachment is also checked. Headless cleanup now closes keep-alive connections and terminates its own browser reliably.
+- Verification: **51 Chrome smoke checks**, JavaScript syntax and whitespace checks passed; no runtime/storage errors. Before/after and fallback captures are in ignored `.dream-loop/hook-fix/`. Exact source comparison confirms pre-render gameplay logic and the frame/input/save tail are unchanged. No dependencies, new art assets or commits; physical-device and Safari/Firefox acceptance remain manual.
+
+### Approved hook-connection refinement — 2026-10-04
+
+- Supersedes the stretched-arm/belt presentation in the previous hook notes. Generated an approved connection target and a transparent replacement winch using **codex-subscription / gpt-image-2**. Three inline visual rounds; no subagent tool was available. The target is visual direction, not a claimed pixel-perfect match.
+- `game.js` / `Constants.js`: preserve the complete painted bent arms and gloves, fit a forged offset crank behind the hands, mount its bearing/compact gear on the actual winch frame, and run the same continuous shaded cable from the drum through the guide to the claw eye. A short ratchet stroke keeps the operator's boots planted. The smaller procedural fallback gets its own appropriately positioned grip and shorter arm, clear of its face.
+- `assets/aaa/winch.webp`: refined local machinery; editable generation source `assets/aaa/winch-connected.png`. The loader still requests the same 17 WebPs, now **2,373,534 bytes** total; no added runtime requests, service or dependency.
+- `smoke-check.cjs`: actual Canvas glove-pixel comparison failed before removing the cutout/flat arm; planted-feet and fallback face-clearance checks also failed before their fixes. Fresh syntax/whitespace and **52 Chrome smoke checks** passed at **06:40 UTC**, with no runtime/storage errors. Exact source comparison confirms all pre-rig gameplay logic and the cable/claw/frame/input/save tail are unchanged; art-loading paths and contract are unchanged.
+- Actual swing/drop/loaded-reel captures cover Classic, Sky and Cavern at 1100×580, 844×390, 320×568 and 393×851. Visually reviewed enlarged Classic/Cavern rigs, Sky desktop, Cavern phone, Classic landscape, and blocked-art fallback. Artifacts/backups/logs/context: ignored `.dream-loop/connection-v2/`. No commits, physics, score, controls, maps, prices or save-schema changes. Self-review only; physical-device and Safari/Firefox acceptance remain manual.
+
+### Manual acceptance
+
+- Play early, middle, and late mines without upgrades, then compare strength/book routes and purchases. Human balance and strategy still need playtesting; a smoke check is not a winnability guarantee.
+- Aim around rocks, detonate TNT, intercept both pigs, and compare the same mine before/after rotating the device.
+- Use an actual touchscreen and keyboard; check tiny diamonds, value labels, dialog scrolling, focus rings, and 44-pixel controls.
+- Listen to the sound mix and optional music on speakers/headphones; browser synthesis checks do not establish audibility or a pleasing mix.
+- Block IndexedDB, reopen the browser on the same origin, and check saves on Safari/Firefox and private browsing.
+- Verify reduced motion and mobile safe-area positioning on physical devices. The game is standalone: there is no Play.fun widget/SDK; the visual eight-percent inset is not a guarantee of clearance for an actual embedding bar, and the spatial aiming field does not provide a nonvisual gameplay mode.

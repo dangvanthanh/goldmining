@@ -3,12 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d0b09">
+  <meta name="theme-color" content="#f8e9bd">
   <title>Gold Mining | Deep Shaft No. 7</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M5 20 9 9l9-4 9 7-2 11-11 4z' fill='%23e8a52c' stroke='%235c3a0a' stroke-width='2'/%3E%3Cpath d='M9 9l9-4 1 8-8 3z' fill='%23ffe9a0'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
   <script src="vendor/dexie.min.js" defer></script>
+  <script src="Constants.js" defer></script>
+  <script src="EventBus.js" defer></script>
+  <script src="scene-assets.js" defer></script>
+  <script src="prospector-art.js" defer></script>
   <script src="cavern-art.js" defer></script>
+  <script src="sky-art.js" defer></script>
   <script src="classic-art.js" defer></script>
   <script src="game.js" defer></script>
 </head>
@@ -17,42 +22,46 @@
     <section id="game-shell" class="game-shell" aria-label="Gold mining expedition">
       <div class="mine-wrap"><canvas id="mine" width="1100" height="580" tabindex="0" aria-label="Mine field. Press Down Arrow or Space to drop the swinging hook. Press D to use dynamite.">Your browser needs Canvas support to play Gold Mining.</canvas>
         <div class="hud plaque" role="group" aria-label="Expedition status">
-          <div class="plaque-row plaque-score"><span class="hud-label">Current score</span><strong class="gold-shine" id="haul">$0</strong></div>
-          <div class="plaque-row plaque-goal"><span class="hud-label">Target · <b id="goal">$525</b></span><div class="progress"><i id="progress"></i></div></div>
-          <div class="plaque-row plaque-time"><span class="hud-label">Time left</span><span id="timer-wrap" class="timer-wrap"><span class="hourglass" aria-hidden="true">⌛</span><strong id="timer">01:00</strong></span></div>
+          <div class="plaque-kicker"><span>Expedition</span><span id="mine-number">01 / 100</span></div>
+          <div class="plaque-row plaque-score"><span class="hud-label">Haul</span><strong class="gold-shine" id="haul">$0</strong></div>
+          <div class="plaque-row plaque-goal"><span class="hud-label">Target · <b id="goal">$525</b></span><div class="progress" id="target-progress" role="progressbar" aria-label="Mining target progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progress"></i></div></div>
+          <div class="plaque-row plaque-time"><span class="hud-label">Time</span><span id="timer-wrap" class="timer-wrap"><svg class="hourglass" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M7 3v4l5 5-5 5v4M17 3v4l-5 5 5 5v4"/></svg><strong id="timer">01:00</strong></span></div>
         </div>
         <div class="hud hud-top-right">
-          <button id="pause" class="gear-button" aria-label="Pause game" disabled><span aria-hidden="true">Ⅱ</span></button>
-          <button id="settings" class="gear-button" aria-label="Open settings" aria-haspopup="dialog"><span aria-hidden="true">⚙</span></button>
+          <button id="pause" class="gear-button" aria-label="Pause game" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 6v12M16 6v12"/></svg></button>
+          <button id="settings" class="gear-button" aria-label="Open settings" aria-haspopup="dialog"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 3-1 3-3 1 1 3-2 2 2 2-1 3 3 1 1 3h6l1-3 3-1-1-3 2-2-2-2 1-3-3-1-1-3Z"/><circle cx="12" cy="12" r="3"/></svg></button>
         </div>
         <div class="hud action-bar" role="group" aria-label="Mining gear">
           <button id="dynamite" class="action-item" disabled><span class="item-icon icon-dynamite" aria-hidden="true"></span><span id="dynamite-count" class="badge" aria-hidden="true">0</span><kbd>D</kbd><span class="visually-hidden">Dynamite</span></button>
           <button id="strength-item" class="action-item" disabled title="Strength drink: 1.5× pulling speed for this mine"><span class="item-icon icon-potion" aria-hidden="true"></span><span class="badge" id="strength-count" aria-hidden="true">0</span><span class="visually-hidden">Strength drink</span></button>
-          <button id="book-item" class="action-item" disabled title="Diamond book: 1.5× diamond value for this mine. Tap to reveal treasure values for 6 seconds."><span class="item-icon icon-binoculars" aria-hidden="true"></span><span class="badge" id="book-count" aria-hidden="true">0</span><span class="visually-hidden">Binoculars</span></button>
-          <button id="magnet-item" class="action-item" disabled title="Magnetic claw: arm a wider gold-catching claw for one launch"><span class="item-icon icon-magnet" aria-hidden="true"></span><span class="badge" id="magnet-count" aria-hidden="true">0</span><span class="visually-hidden">Magnetic claw upgrade</span></button>
-          <div class="action-slot" aria-hidden="true"></div>
+          <button id="book-item" class="action-item" disabled title="Diamond book: 1.5× diamond value for this mine. Tap to reveal treasure values for 6 seconds."><span class="item-icon icon-book" aria-hidden="true"></span><span class="badge" id="book-count" aria-hidden="true">0</span><span class="tool-label" aria-hidden="true">Values</span><span class="visually-hidden">Diamond book: reveal treasure values</span></button>
+          <button id="magnet-item" class="action-item" disabled aria-pressed="false" title="Magnetic claw: arm a wider gold-catching claw for one launch"><span class="item-icon icon-magnet" aria-hidden="true"></span><span class="badge" id="magnet-count" aria-hidden="true">0</span><span class="visually-hidden">Magnetic claw upgrade</span></button>
         </div>
         <div class="hud hud-hint"><span id="location">01 — SUNSET CREEK</span><span class="hint-keys"><span class="key">↓</span> / SPACE · TAP THE FIELD TO DROP</span></div>
         <div id="overlay" class="overlay"><div id="dialog" class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title"></div></div>
         <div id="welcome-overlay" class="settings-overlay welcome-overlay" hidden><div class="settings-panel welcome-panel" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
-          <span class="welcome-claw" aria-hidden="true"><i></i><svg viewBox="0 0 40 38" width="42" height="40"><ellipse cx="20" cy="6" rx="7" ry="5"/><path d="M13 9C10 18 12 26 15 31"/><path d="M27 9C30 18 28 26 25 31"/><path d="M20 9V33"/></svg></span>
+          <canvas class="prospector-portrait welcome-prospector" width="200" height="240" aria-hidden="true"></canvas>
           <span class="welcome-tag">Deep Shaft No. 7</span>
           <h2 id="welcome-title" class="welcome-title">Gold Mining</h2>
           <p class="welcome-tagline">One swinging claw · Sixty seconds · A shaft of gold</p>
           <button id="welcome-new" class="primary"><span class="btn-icon" aria-hidden="true">⛏</span>New game</button>
           <button id="welcome-continue" class="primary" disabled title="Checking for a saved expedition…"><span class="btn-icon" aria-hidden="true">↻</span>Continue game</button>
-          <button id="welcome-guide" class="secondary"><span class="btn-icon" aria-hidden="true">📖</span>Guide</button>
-          <button id="welcome-settings" class="secondary"><span class="btn-icon" aria-hidden="true">⚙</span>Settings</button>
+          <div class="welcome-nav">
+            <button id="welcome-guide" class="secondary"><span class="btn-icon" aria-hidden="true">◇</span>Field guide</button>
+            <button id="welcome-settings" class="secondary"><span class="btn-icon" aria-hidden="true">⚙</span>Settings</button>
+          </div>
         </div></div>
         <div id="settings-overlay" class="settings-overlay" hidden><div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
           <h2 id="settings-title">Settings</h2>
+          <p class="settings-note">The clock stops while settings are open. Reduced motion follows your device preference.</p>
           <label class="setting-row"><span>Sound effects</span><input type="checkbox" id="sound-toggle" role="switch"></label>
           <label class="setting-row"><span>Music</span><input type="checkbox" id="music-toggle" role="switch"></label>
           <label class="setting-row"><span>Shake &amp; vibration</span><input type="range" id="shake-range" min="0" max="100" step="10" value="100"></label>
           <div class="setting-row setting-art"><span>Art style</span>
             <div class="art-choice" role="radiogroup" aria-label="Art style">
-              <label><input type="radio" name="art" value="cavern" id="art-cavern"><span>Cavern<span class="art-sub">Lantern-lit rock</span></span></label>
-              <label><input type="radio" name="art" value="classic" id="art-classic"><span>Classic<span class="art-sub">Daylight cartoon</span></span></label>
+              <label><input type="radio" name="art" value="classic" id="art-classic"><span>Classic<span class="art-sub">Vintage prairie &amp; copper earth</span></span></label>
+              <label><input type="radio" name="art" value="cavern" id="art-cavern"><span>Cavern<span class="art-sub">Cinematic lantern-lit depths</span></span></label>
+              <label><input type="radio" name="art" value="sky" id="art-sky"><span>Sky<span class="art-sub">Sunlit alpine expedition</span></span></label>
             </div>
           </div>
           <button id="settings-close" class="primary">Back to the shaft</button>

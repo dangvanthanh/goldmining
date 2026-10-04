@@ -3,28 +3,45 @@
   const $ = id => document.getElementById(id);
   const canvas = $('mine'), ctx = canvas.getContext('2d');
   const W = 1100, H = 580, origin = { x: 550, y: 132 };
+  const VISUAL = window.VisualConstants, Events = window.VisualEvents;
+  const signal = (name, detail = {}) => window.VisualBus.dispatchEvent(new CustomEvent(name, { detail }));
+  document.documentElement.style.setProperty('--visual-portrait-height', VISUAL.portraitUiHeightPx + 'px');
+  document.documentElement.style.setProperty('--visual-entry-ms', VISUAL.entranceMs + 'ms');
+  document.documentElement.style.setProperty('--visual-pulse-ms', VISUAL.pulseMs + 'ms');
+  const FEEL = { scoreMs: 500, physicsStep: 1 / 120, frameCap: .1, maxParticles: 180, calmParticleRatio: .2, valueFontPx: 12, bannerKickerPx: 10, bannerWidthRatio: .075, outlinePx: 1.5, labelGapPx: 3, viewportGapPx: 10 };
+  const SKY = { gold: ['#fff3b0', '#ffd15d', '#d89422', '#a66614', '#e5ab34', '#7c4c13'], rock: ['#c4b99b', '#8d846f', '#514a3d'], coat: ['#598259', '#304d39'], skin: '#e9bb82', beard: '#e6dfc4', surfaceOpacity: .35 };
   // Art providers are interchangeable: paintBackground / paintLight / surface.
-  const ART_PROVIDERS = { cavern: 'CavernArt', classic: 'ClassicArt' };
-  let artName = 'cavern';
-  try { const stored = localStorage.getItem('gm-art'); if (ART_PROVIDERS[stored]) artName = stored; } catch {}
+  const ART_PROVIDERS = { classic: 'ClassicArt', cavern: 'CavernArt', sky: 'SkyArt' };
+  let artName = 'classic';
+  try { const stored = localStorage.getItem('gm-art'); if (Object.hasOwn(ART_PROVIDERS, stored)) artName = stored; } catch {}
+  document.documentElement.style.setProperty('--classic-paper', VISUAL.classic.uiPaper);
+  document.documentElement.style.setProperty('--classic-line', VISUAL.classic.uiLine);
+  document.documentElement.style.setProperty('--classic-soil', VISUAL.classic.soil[0]);
   let art = window[ART_PROVIDERS[artName]];
   document.documentElement.dataset.art = artName;
-  // The canvas always fills the viewport: the W×H field is stretched to the screen
-  // (fit.sx/sy are device pixels per field unit) and sprites undo the stretch through
-  // objectAspect, so treasure stays round and nothing is cropped or letterboxed.
-  let objectAspect = 1, fit = { sx: 1, sy: 1, oy: 0 }, repaintTimer = 0, resized = false;
+  // One uniform scale keeps spacing, collision and blasts identical at every size.
+  // The playable field fits the viewport; procedural art fills the surrounding space.
+  const objectAspect = 1;
+  let fit = { sx: 1, sy: 1, ox: 0, oy: 0 }, repaintTimer = 0, resized = false;
+  const cssScale = () => fit.sx * canvas.clientWidth / canvas.width;
   const PORTRAIT = matchMedia('(max-aspect-ratio: 3/4)');
   function resize() {
     const rect = canvas.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
+    document.documentElement.style.setProperty('--safe-top', Math.ceil(rect.height * VISUAL.safeTopRatio) + 'px');
     // Cap the backing store near 4 MP so full-screen frames stay cheap.
     const dpr = Math.min(devicePixelRatio || 1, 2, Math.sqrt(4e6 / (rect.width * rect.height)));
     canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
-    // Tall phones keep the field between the score plaque and the tool bar; the art fills the rest.
-    const top = PORTRAIT.matches ? document.querySelector('.plaque').getBoundingClientRect().bottom - rect.top + 10 : 0;
-    const bottom = PORTRAIT.matches ? rect.bottom - document.querySelector('.hud-hint').getBoundingClientRect().top + 6 : 0;
-    fit = { sx: canvas.width / W, sy: (rect.height - top - bottom) * dpr / H, oy: top * dpr };
-    objectAspect = fit.sx / fit.sy;
+    // Keep targets clear of controls: the plaque sits above phones, beside wide fields.
+    const plaque = document.querySelector('.plaque').getBoundingClientRect(), gap = FEEL.viewportGapPx;
+    const top = PORTRAIT.matches ? plaque.bottom - rect.top + gap : rect.height * VISUAL.safeTopRatio;
+    const left = 0;
+    const bottom = rect.bottom - Math.min(document.querySelector('.hud-hint').getBoundingClientRect().top, document.querySelector('.action-bar').getBoundingClientRect().top) + gap;
+    const width = Math.max(1, rect.width - left), height = Math.max(1, rect.height - top - bottom);
+    const scale = Math.min(width * dpr / W, height * dpr / H);
+    fit = { sx: scale, sy: scale, ox: (width * dpr - W * scale) / 2, oy: top * dpr + (height * dpr - H * scale) / 2 };
+    // The real operator belongs on the gantry, never duplicated over the scenery.
+    portraitBox = null;
     art.paintLight(cone, lampSpot());
     clearTimeout(repaintTimer);
     repaintTimer = setTimeout(() => paintBackground(level), resized ? 150 : 0);
@@ -115,6 +132,30 @@
   // Game feel: crank position, ratchet cadence, hit-stop, screen flash, title card, goal moment.
   let crankAngle = 0, reelClick = 0, hitStop = 0, flash = null, banner = null, goalMet = false, lastSecond = 60;
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  // Ephemeral presentation only: none of this is serialized or used by collisions.
+  let reaction = 'normal', reactionUntil = 0, pulseUntil = 0, entranceAt = 0, trailAt = 0;
+  let rings = [], trail = [], portraitBox = null, portraitKey = '';
+  function expression(now) {
+    if (phase === 'lost') return 'worried';
+    if (phase === 'won' || phase === 'shop') return 'happy';
+    if (now < reactionUntil) return reaction;
+    if (caught) return ['diamond', 'gem', 'diamondPig'].includes(caught.type) ? 'surprised' : caught.type === 'rock' ? 'worried' : 'pulling';
+    return time <= 10 && phase === 'playing' ? 'worried' : 'normal';
+  }
+  for (const event of [Events.CATCH, Events.REWARD, Events.BLAST]) window.VisualBus.addEventListener(event, ({ detail }) => {
+    const now = performance.now();
+    reaction = event === Events.REWARD ? 'happy' : event === Events.BLAST ? 'surprised' : detail.gem ? 'surprised' : detail.kind === 'stone' ? 'worried' : 'pulling';
+    reactionUntil = now + VISUAL.expressionMs;
+    if (event === Events.REWARD) pulseUntil = now + VISUAL.pulseMs;
+    if (!calm.matches) {
+      rings.push({ x: detail.pos.x, y: detail.pos.y, radius: detail.radius, start: now, gem: detail.gem });
+      rings = rings.slice(-VISUAL.maxRings);
+    }
+  });
+  window.VisualBus.addEventListener(Events.ENTRANCE, () => {
+    entranceAt = performance.now(); reactionUntil = 0; pulseUntil = 0; rings = []; trail = []; trailAt = 0;
+  });
+  window.VisualBus.addEventListener(Events.RESULT, () => { banner = null; rings = []; trail = []; });
   const money = n => '$' + n.toLocaleString('en-US');
   // New games and Continue must share storage from the first save onward.
   const db = new Dexie('GoldMining');
@@ -367,20 +408,46 @@
     sfx('goal'); burst({ x: 700, y: 92 }, 'fire');
   }
   function notify(text) { $('toast').textContent = text; toastUntil = performance.now() + 2500; }
+  function activeModal() {
+    return ['settings-overlay', 'welcome-overlay', 'overlay'].map($).find(el => !el.hidden);
+  }
+  function syncModal() {
+    const modal = activeModal();
+    canvas.inert = Boolean(modal); canvas.tabIndex = modal ? -1 : 0;
+    document.querySelectorAll('.hud').forEach(el => { el.inert = Boolean(modal); });
+    for (const id of ['settings-overlay', 'welcome-overlay', 'overlay']) $(id).inert = Boolean(modal && $(id) !== modal);
+    return modal;
+  }
+  function focusGame() {
+    const modal = syncModal();
+    (modal?.querySelector('button:not(:disabled), input:not(:disabled)') || canvas).focus({ preventScroll: true });
+  }
   function showDialog(content) {
+    const entering = $('overlay').hidden || $('dialog').dataset.scene !== phase;
+    $('dialog').dataset.scene = phase;
     $('dialog').innerHTML = content;
+    for (const portrait of $('dialog').querySelectorAll('.prospector-portrait')) window.ProspectorArt.paint(portrait, expression(performance.now()), artName);
+    if (entering && !calm.matches) $('dialog').animate([{ opacity: .6, transform: 'translateY(12px)' }, { opacity: 1, transform: 'translateY(0)' }], { duration: VISUAL.transitionMs, easing: 'ease-out' });
     $('dialog').querySelector('h2').id = 'dialog-title';
     $('overlay').hidden = false;
-    canvas.tabIndex = -1;
-    $('dialog').querySelector('button')?.focus();
+    focusGame();
   }
-  function hideDialog() { $('overlay').hidden = true; canvas.tabIndex = 0; canvas.focus({ preventScroll: true }); }
+  function hideDialog() { $('overlay').hidden = true; focusGame(); }
+  let hudKey = '';
   function updateHUD() {
+    const key = [level, bank, haul, Math.ceil(time), phase, hookState, caught?.id, dynamite, strength, book, magnet, magnetArmed].join('|');
+    if (key === hudKey) return;
+    hudKey = key;
     rollScore(bank + haul);
     $('goal').textContent = money(levels[level][1]);
-    $('progress').style.width = Math.min(100, (bank + haul) / levels[level][1] * 100) + '%';
-    $('timer').textContent = '00:' + String(Math.ceil(time)).padStart(2, '0');
-    if (time === 60) $('timer').textContent = '01:00';
+    const progress = Math.min(100, (bank + haul) / levels[level][1] * 100);
+    $('progress').style.width = progress + '%';
+    $('target-progress').setAttribute('aria-valuenow', Math.round(progress));
+    $('target-progress').setAttribute('aria-valuetext', `${money(bank + haul)} of ${money(levels[level][1])} target`);
+    document.querySelector('.plaque').dataset.target = progress >= 100 ? 'met' : 'mining';
+    $('mine-number').textContent = `${String(level + 1).padStart(2, '0')} / ${levels.length}`;
+    const seconds = Math.max(0, Math.ceil(time));
+    $('timer').textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
     $('timer').classList.toggle('urgent', time <= 15);
     $('location').textContent = String(level + 1).padStart(2, '0') + ' — ' + levels[level][0].toUpperCase();
     $('dynamite-count').textContent = dynamite;
@@ -391,17 +458,21 @@
     $('magnet-count').textContent = magnet ? 1 : 0;
     $('magnet-item').disabled = phase !== 'playing' || !magnet || hookState !== 'swing';
     $('magnet-item').classList.toggle('armed', magnetArmed);
+    $('magnet-item').setAttribute('aria-pressed', String(magnetArmed));
+    $('dynamite').setAttribute('aria-label', `Dynamite: ${dynamite} charges. Destroy current catch.`);
     $('dynamite').disabled = phase !== 'playing' || !caught || dynamite === 0;
     $('pause').disabled = !['playing', 'paused'].includes(phase);
   }
-  // Score roll-up: the displayed value chases the real total with an ease-out tween.
-  let shownScore = 0, scoreAnim = 0;
-  function rollScore(target) {
-    if (target === shownScore) return;
+  // Retarget only when the real total changes; repeated frames must not restart the tween.
+  let shownScore = 0, scoreTarget = 0, scoreAnim = 0;
+  function rollScore(target, immediate = false) {
+    if (target === scoreTarget && !immediate) return;
+    scoreTarget = target;
     cancelAnimationFrame(scoreAnim);
+    if (immediate || calm.matches) { shownScore = target; $('haul').textContent = money(target); return; }
     const from = shownScore, start = performance.now();
     const step = now => {
-      const t = Math.min(1, (now - start) / 500);
+      const t = Math.max(0, Math.min(1, (now - start) / FEEL.scoreMs));
       shownScore = t < 1 ? Math.round(from + (target - from) * (1 - Math.pow(1 - t, 3))) : target;
       $('haul').textContent = money(shownScore);
       if (t < 1) scoreAnim = requestAnimationFrame(step);
@@ -412,13 +483,16 @@
     objects = makeMap(level); haul = 0; time = 60; swing = -.8; angle = 0; shakeMag = 0; shakeTime = 0;
     paintBackground(level);
     length = 23; caught = null; hookState = 'swing'; particles = []; popups = [];
-    magnetArmed = false; revealUntil = 0; reelSpeed = 0;
+    magnetArmed = false; revealUntil = 0; reelSpeed = 0; crankAngle = 0; reelClick = 0;
     phase = 'playing'; deadline = performance.now() + 60000;
+    signal(Events.ENTRANCE);
     const goal = levels[level][1];
     goalMet = bank >= goal; lastSecond = 60; hitStop = 0; flash = null;
     showBanner(`MINE ${String(level + 1).padStart(2, '0')} OF ${levels.length}`, levels[level][0],
       `Target ${money(goal)} · ${goalMet ? 'your surplus already covers it' : '60 seconds on the clock'}`);
+    rollScore(bank, true);
     hideDialog(); updateHUD(); saveProgress();
+    if (music) updateMusic();
   }
   function finishLevel() {
     if (phase !== 'playing') return;
@@ -439,11 +513,13 @@
     updateHUD(); saveProgress();
   }
   function renderResult() {
+    signal(Events.RESULT);
+    const portrait = '<canvas class="prospector-portrait result-prospector" width="200" height="240" aria-hidden="true"></canvas>';
     if (phase === 'lost') {
-      showDialog(`<span class="badge">ANOTHER SHOT AT THE SEAM</span><h2>Chin up, miner!</h2><p>You brought in ${money(bank + haul)} of ${money(levels[level][1])}.<br>Try a new angle. Diamonds are light and valuable.</p><button class="primary" id="retry">Dig again ↻</button>`);
+      showDialog(`${portrait}<span class="badge">ANOTHER SHOT AT THE SEAM</span><h2>Chin up, miner!</h2><dl class="result-stats"><div class="result-stat"><dt>Brought in</dt><dd>${money(bank + haul)}</dd></div><div class="result-stat"><dt>Target</dt><dd>${money(levels[level][1])}</dd></div><div class="result-stat"><dt>To go</dt><dd>${money(levels[level][1] - bank - haul)}</dd></div></dl><p>Try a new angle. Diamonds are light and valuable.</p><button class="primary" id="retry">Dig again ↻</button>`);
       $('retry').onclick = startLevel;
     } else {
-      showDialog(`<span class="badge">${levels.length} SHAFTS. ONE LEGEND.</span><h2>What a haul!</h2><p>You worked all ${levels.length} mines and still carry ${money(bank)}.<br>The whole crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
+      showDialog(`${portrait}<span class="badge">${levels.length} SHAFTS. ONE LEGEND.</span><h2>What a haul!</h2><dl class="result-stats"><div class="result-stat"><dt>Mines cleared</dt><dd>${levels.length}</dd></div><div class="result-stat"><dt>Gold to spare</dt><dd>${money(bank)}</dd></div></dl><p>The whole crew salutes you.</p><button class="primary" id="restart">A new expedition ↗</button>`);
       $('restart').onclick = () => { mapVersion = 3; level = 0; bank = 0; dynamite = 0; strength = false; book = false; magnet = false; startLevel(); };
     }
   }
@@ -458,8 +534,9 @@
     };
   }
   function renderShop() {
+    signal(Events.RESULT);
     const prices = supplyPrices(level + 1);
-    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p>Target met. Your surplus: <strong>${money(bank)}</strong><br>Next mine: ${levels[level + 1][0]} · Target ${money(levels[level + 1][1])}</p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon icon-dynamite" aria-hidden="true"></span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon icon-potion" aria-hidden="true"></span><strong>Strength drink</strong><small>${strengthBonus}× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon icon-book" aria-hidden="true"></span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
+    showDialog(`<span class="badge">MINE ${String(level + 1).padStart(2, '0')} COMPLETE · SUPPLY SHACK</span><h2>Stock up, miner.</h2><p class="shop-summary"><span>Cash to spend <strong>${money(bank)}</strong></span><span>Up next · ${levels[level + 1][0]}<b>Target ${money(levels[level + 1][1])}</b></span></p><div class="shop-items"><button class="shop-item" id="buy-dynamite" ${bank < prices.dynamite || dynamite >= dynamiteCapacity ? 'disabled' : ''}><span class="item-icon icon-dynamite" aria-hidden="true"></span><strong>Dynamite</strong><small>Destroy your catch<br>${dynamite}/${dynamiteCapacity} in your pack</small><span>${dynamite >= dynamiteCapacity ? 'Pack full' : money(prices.dynamite)}</span></button><button class="shop-item" id="buy-strength" ${bank < prices.strength || strength ? 'disabled' : ''}><span class="item-icon icon-potion" aria-hidden="true"></span><strong>Strength drink</strong><small>${strengthBonus}× pulling speed<br>Next mine only</small><span>${strength ? 'Packed ✓' : money(prices.strength)}</span></button><button class="shop-item" id="buy-book" ${bank < prices.book || book ? 'disabled' : ''}><span class="item-icon icon-book" aria-hidden="true"></span><strong>Diamond book</strong><small>${diamondBonus}× diamond value<br>Next mine only</small><span>${book ? 'Packed ✓' : money(prices.book)}</span></button></div><p>Supplies cost part of your next goal. Save cash, or invest in a better haul.</p><button class="primary" id="next">On to mine ${level + 2} →</button>`);
     $('dialog').querySelector('.shop-items').insertAdjacentHTML('beforeend', `<button class="shop-item" id="buy-magnet" ${bank < prices.magnet || magnet ? 'disabled' : ''}><span class="item-icon icon-magnet" aria-hidden="true"></span><strong>Magnetic claw</strong><small>Wider gold capture<br>One launch · arm in the field</small><span>${magnet ? 'Packed ✓' : money(prices.magnet)}</span></button>`);
     $('buy-magnet').onclick = () => buy('magnet');
     $('buy-dynamite').onclick = () => buy('dynamite');
@@ -490,8 +567,8 @@
   const hookPosition = () => ({ x: origin.x + Math.sin(angle) * length, y: origin.y + Math.cos(angle) * length });
   // Debris: chunky stone shards that fall under gravity, gold dust that drifts and glitters.
   function burst(pos, kind = 'stone') {
-    const shiny = kind === 'gold' || kind === 'fire', count = kind === 'fire' ? 46 : shiny ? 26 : 20;
-    for (let i = 0; i < count; i++) {
+    const shiny = kind === 'gold' || kind === 'fire', count = Math.round((kind === 'fire' ? 46 : shiny ? 26 : 20) * (calm.matches ? FEEL.calmParticleRatio : 1));
+    for (let i = 0; i < count && particles.length < FEEL.maxParticles; i++) {
       const direction = Math.random() * Math.PI * 2, speed = (shiny ? 70 : 90) + Math.random() * (shiny ? 190 : 230);
       const life = (shiny ? .85 : 1.15) * (.55 + Math.random() * .75);
       particles.push({
@@ -503,10 +580,11 @@
     if (kind === 'fire') for (let i = 0; i < 12; i++) burst({ x: pos.x + Math.random() * 30 - 15, y: pos.y + Math.random() * 30 - 15 }, 'gold');
   }
   function shake(amount) {
+    if (calm.matches) return;
     const scaled = amount * shakeScale;
     if (scaled < 1) return;
     shakeMag = Math.max(shakeMag, scaled); shakeTime = .4;
-    navigator.vibrate?.(Math.min(40, Math.round(amount * .4)));
+    navigator.vibrate?.(Math.min(40, Math.round(scaled * .4)));
   }
   function detonate(barrel) {
     const pending = [barrel];
@@ -521,6 +599,7 @@
         if (obj.type === 'tnt') pending.push(obj);
       }
     }
+    signal(Events.BLAST, { pos: barrel, radius: barrel.radius });
     caught = null; hookState = 'back';
     sfx('boom'); flashScreen('255,190,110', .55); hitStop = .1;
     notify('TNT! Nearby treasure destroyed. No points earned.');
@@ -532,6 +611,7 @@
     const pos = hookPosition();
     burst(pos, 'fire');
     shake(12);
+    signal(Events.BLAST, { pos, radius: caught.radius });
     caught = null; dynamite--; sfx('boom'); flashScreen('255,190,110', .3); notify('Catch destroyed. Back to the good stuff.'); updateHUD(); saveProgress();
   }
   function pause() {
@@ -540,16 +620,21 @@
       if (!time) { finishLevel(); return; }
       phase = 'paused';
       renderPause();
-    } else if (phase === 'paused') { phase = 'playing'; deadline = performance.now() + time * 1000; hideDialog(); }
+    } else if (phase === 'paused') { phase = 'playing'; deadline = performance.now() + time * 1000; hideDialog(); if (music) updateMusic(); }
     updateHUD(); saveProgress();
   }
   function renderPause() {
     showDialog('<span class="badge">TAKE FIVE</span><h2>At ease, miner.</h2><p>Your haul is safe underground and the clock is stopped. Ready when you are.</p><button class="primary" id="resume">Back to the seam →</button>');
     $('resume').onclick = pause;
   }
+  function catchValue(obj) {
+    return obj.type === 'diamondPig'
+      ? types.pig.value + Math.round((obj.value - types.pig.value) * (book ? diamondBonus : 1))
+      : Math.round(obj.value * (obj.type === 'diamond' && book ? diamondBonus : 1));
+  }
   function update(dt, now) {
     if (phase !== 'playing') return;
-    time = Math.max(0, (deadline - now) / 1000);
+    time = Math.max(0, Math.min(60, (deadline - now) / 1000));
     if (!time) { finishLevel(); return; }
     const second = Math.ceil(time);   // the last ten seconds tick audibly
     if (second !== lastSecond) { lastSecond = second; if (second <= 10) sfx('tick'); }
@@ -565,6 +650,7 @@
       else if (caught) {
         caught.taken = true; hookState = 'back';
         const metal = caught.type === 'rock' ? 'stone' : 'gold', gem = ['diamond', 'gem', 'diamondPig'].includes(caught.type);
+        signal(Events.CATCH, { pos: p, radius: caught.radius, kind: metal, gem });
         sfx(caught.type === 'rock' ? 'thud' : gem ? 'sparkle' : 'clink');
         burst(p, metal);
         shake(caught.type === 'large' || caught.type === 'diamondPig' ? 7 : 3);
@@ -583,10 +669,9 @@
       if (length <= 23) {
         length = 23; hookState = 'swing'; magnetArmed = false;
         if (caught) {
-          const value = caught.type === 'diamondPig'
-            ? types.pig.value + Math.round((caught.value - types.pig.value) * (book ? diamondBonus : 1))
-            : Math.round(caught.value * (caught.type === 'diamond' && book ? diamondBonus : 1));
+          const value = catchValue(caught);
           haul += value;
+          signal(Events.REWARD, { pos: { x: 700, y: 92 }, radius: caught.radius, gem: ['diamond', 'gem', 'diamondPig'].includes(caught.type) });
           if (!calm.matches) $('haul').animate([{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.4)' });
           if (value >= 800) flashScreen('255,214,120', .14);
           popups.push({ text: '+' + money(value), x: 700, y: 74, life: 1.6 });
@@ -608,20 +693,38 @@
     }
     particles = particles.filter(p => p.life > 0);
     popups.forEach(p => { p.y -= 30 * dt; p.life -= dt; }); popups = popups.filter(p => p.life > 0);
-    updateHUD();
   }
-  function polygon(points, fill, stroke) {
+  function polygon(points, fill, stroke, width = 2) {
     ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
-    ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.stroke(); }
   }
   function ellipse(x, y, rx, ry, fill) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill(); }
   function line(points, color, width = 2) { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke(); }
   function drawObject(obj, x = obj.x, y = obj.y) {
-    const r = obj.radius;
+    const r = obj.radius, daylight = art.lit === false, now = calm.matches ? 0 : performance.now();
     ctx.save(); ctx.translate(x, y); ctx.scale(1, objectAspect); ctx.rotate(obj.rotation);
     ellipse(3, r * .7, r * .9, r * .35, '#171b183a');
+    const paintedKind = ['rock','diamond','gem','bag','tnt'].includes(obj.type) ? obj.type : ['small','gold','large'].includes(obj.type) ? 'gold' : null;
+    const painted = !art.flatOre && window.SceneAssets?.sprites[paintedKind];
+    if (painted) {
+      const size = r * 2 / Math.max(painted.width, painted.height);
+      ctx.drawImage(painted,-painted.width*size/2,-painted.height*size/2,painted.width*size,painted.height*size);
+      ctx.restore(); return;
+    }
     if (obj.speed) {
       ctx.scale(obj.direction, 1);
+      const pig = window.SceneAssets?.sprites.pig;
+      if (pig) {
+        const width=r*2, height=width*pig.height/pig.width;
+        const bob=obj.taken?0:Math.sin((60-time)*obj.speed*.2)*1.2;
+        ctx.drawImage(pig,-width/2,-height*.55+bob,width,height);
+        if(obj.taken) { ellipse(r*.55,-r*.25,3,3.5,'#fff1d1'); ellipse(r*.6,-r*.25,1.5,2,'#35251c'); }
+        if(obj.type==='diamondPig') {
+          const gem=window.SceneAssets.sprites.diamond;
+          if(gem) ctx.drawImage(gem,r*.68,-1,r*.58,r*.49);
+        }
+        ctx.restore(); return;
+      }
       const stride = obj.taken ? 0 : Math.sin((60 - time) * obj.speed * .2) * 4;
       line([[-13,10],[-14 + stride,19]], '#d68c7e', 6);
       line([[9,10],[10 - stride,19]], '#d68c7e', 6);
@@ -639,8 +742,13 @@
       ellipse(21, 1, 1.1, 1.7, '#a75e5b');
       ellipse(25, 1, 1.1, 1.7, '#a75e5b');
       ellipse(11, 3, 4, 2.5, '#a9826a');
-      ellipse(16, -6, 2.8, 3.3, '#352d29');
-      ellipse(16.8, -7.2, 1, 1.2, '#fff8eb');
+      if (obj.taken) {
+        ellipse(16, -6, 4, 5, VISUAL.palettes[artName].lamp);
+        ellipse(17, -5, 2, 3, VISUAL.palettes[artName].outline);
+      } else {
+        ellipse(16, -6, 2.8, 3.3, '#352d29');
+        ellipse(16.8, -7.2, 1, 1.2, '#fff8eb');
+      }
       ctx.beginPath(); ctx.arc(18, 5, 3, .15, Math.PI * .85);
       ctx.strokeStyle = '#a75e5b'; ctx.lineWidth = 1.2; ctx.stroke();
       if (obj.type === 'diamondPig') {
@@ -651,7 +759,7 @@
         line([[26,-6],[34,-6]], '#efffff', 2);
       }
     } else if (obj.type === 'diamond' || obj.type === 'gem') {
-      polygon([[-r, -r*.3], [-r*.5, -r], [r*.5, -r], [r, -r*.3], [0, r]], obj.color, '#4d8e85');
+      polygon([[-r, -r*.3], [-r*.5, -r], [r*.5, -r], [r, -r*.3], [0, r]], obj.color, '#4d8e85', Math.max(2, FEEL.outlinePx / cssScale()));
       polygon([[-r,-r*.3],[0,-r*.3],[-r*.5,-r]], '#dcfff0');
       polygon([[0,-r*.3],[r,-r*.3],[0,r]], '#5fa99b');
       line([[-r,-r*.3],[r,-r*.3]], '#e2fff0', 1);
@@ -682,8 +790,8 @@
       ctx.strokeStyle = '#71352a'; ctx.lineWidth = 1; ctx.strokeRect(-r*.58, -r*.2, r*1.16, r*.5);
       ctx.fillStyle = '#782d25'; ctx.font = '900 12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('TNT', 0, r*.19);
       line([[3,-r*.76],[7,-r],[13,-r*.95]], '#665736', 2);
-      const spark = .5 + Math.sin(performance.now()*.009 + obj.id)*.5;
-      drawGlow(13,-r*.95,2,performance.now(),8,.2+spark*.3);
+      const spark = .5 + Math.sin(now*.009 + obj.id)*.5;
+      drawGlow(13,-r*.95,2,now,8,.2+spark*.3);
       ellipse(13,-r*.95,1.2,1.2,'#ffe1a0');
     } else if (obj.type === 'bag') {
       polygon([[-9,-18],[-13,-27],[0,-23],[12,-27],[8,-16]], '#e0be8a');
@@ -693,19 +801,28 @@
     } else {
       const pts = obj.outline || [[-r, -r * .1], [-r * .7, -r * .7], [-r * .1, -r], [r * .7, -r * .6], [r, r * .2], [r * .4, r * .8], [-r * .5, r * .7]];
       const rocky = obj.type === 'rock';
+      if (art.flatOre) {
+        const colors = VISUAL.classic.ore;
+        polygon(pts, rocky ? colors.rock : colors.gold, colors.outline, Math.max(1.8, FEEL.outlinePx / cssScale()));
+        ctx.save(); ctx.beginPath(); pts.forEach(([px,py],i)=>i?ctx.lineTo(px,py):ctx.moveTo(px,py)); ctx.closePath(); ctx.clip();
+        polygon([[-r,-r*.15],[-r*.5,-r*.8],[r*.25,-r*.65],[-r*.1,-r*.2]], rocky ? colors.rockLight : colors.goldLight, null);
+        polygon([[-r*.6,r*.4],[r*.3,r*.55],[r,r*.1],[r*.55,r*.9],[-r*.3,r*.8]], rocky ? colors.rockShade : colors.goldShade, null);
+        if (rocky) for (const crack of (obj.cracks || []).slice(0,2)) line(crack, colors.rockShade, FEEL.outlinePx / cssScale());
+        ctx.restore(); ctx.restore(); return;
+      }
       ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath();
       const shade = ctx.createRadialGradient(-r * .35, -r * .5, r * .1, 0, 0, r * 1.55);
       if (rocky) {
-        shade.addColorStop(0, '#837b60'); shade.addColorStop(.5, '#4d4b3b'); shade.addColorStop(1, '#1d2521');
+        shade.addColorStop(0, daylight ? SKY.rock[0] : '#837b60'); shade.addColorStop(.5, daylight ? SKY.rock[1] : '#4d4b3b'); shade.addColorStop(1, daylight ? SKY.rock[2] : '#1d2521');
       } else {
-        shade.addColorStop(0, '#fff2b6'); shade.addColorStop(.2, '#ecb644'); shade.addColorStop(.43, '#966012'); shade.addColorStop(.6, '#432807'); shade.addColorStop(.8, '#b7791b'); shade.addColorStop(1, '#211406');
+        [0, .2, .43, .6, .8, 1].forEach((at, i) => shade.addColorStop(at, daylight ? SKY.gold[i] : ['#fff2b6', '#ecb644', '#966012', '#432807', '#b7791b', '#211406'][i]));
       }
       ctx.fillStyle = shade; ctx.fill();
       // Rim light: the lantern sits up-centre, so the upper-left edge catches a warm lip.
       const rim = ctx.createLinearGradient(-r * .9, -r * .9, r * .8, r * .8);
       if (rocky) { rim.addColorStop(0, 'rgba(228,222,198,.75)'); rim.addColorStop(.45, 'rgba(120,118,100,.25)'); rim.addColorStop(1, 'rgba(10,12,10,.8)'); }
       else { rim.addColorStop(0, 'rgba(255,244,200,.9)'); rim.addColorStop(.45, 'rgba(200,130,40,.35)'); rim.addColorStop(1, 'rgba(40,20,0,.8)'); }
-      ctx.strokeStyle = rim; ctx.lineWidth = 1.8; ctx.stroke();
+      ctx.strokeStyle = rim; ctx.lineWidth = Math.max(1.8, FEEL.outlinePx / cssScale()); ctx.stroke();
       ctx.save(); ctx.clip();
       if (rocky && obj.cracks) {   // fissures so boulders read as stone, not grey gems
         ctx.strokeStyle = 'rgba(0,0,0,.38)'; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
@@ -739,7 +856,7 @@
         if (obj.glints) {
           ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
           for (const g of obj.glints) {
-            const tw = Math.max(0, Math.sin(performance.now() * .0021 + g.phase));
+            const tw = Math.max(0, Math.sin(now * .0021 + g.phase));
             const gs = g.s * (.4 + tw * .6), a = tw * tw * .85;
             if (a < .04) continue;
             ctx.globalAlpha = a;
@@ -756,6 +873,7 @@
       } else {
         polygon([[-r * .8, -r * .2], [-r * .55, -r * .62], [0, -r * .8], [-r * .1, -r * .3]], 'rgba(216,214,192,.4)');
       }
+      if (daylight) ctx.globalAlpha *= SKY.surfaceOpacity;
       ctx.drawImage(art.surface(obj.id, r, rocky), -r * 1.3, -r * 1.3, r * 2.6, r * 2.6);
       ctx.restore();
       polygon([[-r * .62, r * .42], [-r * .2, r * .62], [r * .44, r * .5], [r * .1, r * .74], [-r * .5, r * .68]], 'rgba(0,0,0,.22)');
@@ -789,12 +907,12 @@
   art.paintLight(cone, LAMP);
   // Switching styles repaints the static layers; nothing else depends on the provider.
   function applyArt(name) {
-    if (!ART_PROVIDERS[name]) return;
+    if (!Object.hasOwn(ART_PROVIDERS, name)) return;
     artName = name; art = window[ART_PROVIDERS[name]];
     document.documentElement.dataset.art = artName;
     try { localStorage.setItem('gm-art', artName); } catch {}
-    art.paintLight(cone, lampSpot());
-    paintBackground(level);
+    portraitKey = ''; resize();
+    clearTimeout(repaintTimer); paintBackground(level);
   }
   function drawGlow(x, y, r, now, spread = 4.6, base = .42, aspect = 1) {
     const pulse = .72 + Math.sin(now * .0031 + x * .045 + y * .027) * .28;
@@ -809,12 +927,35 @@
   // view.top/bottom are the visible field rows beyond 0..H the art must also cover.
   function paintBackground(seed = 0) {
     background.width = canvas.width; background.height = canvas.height;
-    background.getContext('2d').setTransform(fit.sx, 0, 0, fit.sy, 0, fit.oy);
-    art.paintBackground(background, seed, lampSpot(), { top: -fit.oy / fit.sy, bottom: (canvas.height - fit.oy) / fit.sy, aspect: objectAspect });
+    background.getContext('2d').setTransform(fit.sx, 0, 0, fit.sy, fit.ox, fit.oy);
+    art.paintBackground(background, seed, lampSpot(), { left: -fit.ox / fit.sx, right: (canvas.width - fit.ox) / fit.sx, top: -fit.oy / fit.sy, bottom: (canvas.height - fit.oy) / fit.sy, aspect: objectAspect });
   }
-  // The rig: timber headframe, winch, ore cart heaped with gold, and the one lantern that lights the shaft.
+  // Live timber gantry, animated winch, earned-haul cart, and the shaft lantern.
   function drawRig(now) {
+    const daylight = art.lit === false;
+    if (calm.matches) now = 0;
     const flicker = .82 + Math.sin(now * .013) * .06 + Math.sin(now * .041) * .05 + Math.sin(now * .0073) * .05;
+    // Dimensional timber and railwork ground the live rig in every backdrop.
+    const timber=ctx.createLinearGradient(0,130,0,154);
+    timber.addColorStop(0,'#b58646'); timber.addColorStop(.18,'#6f4927'); timber.addColorStop(1,'#21170f');
+    // A real opening in the catwalk lets the cable leave its fixed swing pivot.
+    polygon([[385,132],[528,132],[528,151],[572,151],[572,132],[810,132],[798,151],[396,151]],timber,'#1a160e',1);
+    line([[385,132],[528,132]],'#d7ab67',2); line([[572,132],[810,132]],'#d7ab67',2);
+    for(let x=398;x<800;x+=24) {
+      if(x+17>528 && x<572) continue;
+      line([[x,137],[x+17,137]],'#c7955344',.7); ellipse(x,144,1.5,1.5,'#191a15');
+    }
+    if(!daylight) {
+      for(const x of [401,793]) {
+        line([[x,-20],[x,133]],'#1d1911',7); line([[x-2,-20],[x-2,132]],'#ae854748',1);
+        line([[x,149],[x+10,218]],'#2f2117',12); line([[x-3,152],[x+6,214]],'#84613c55',2);
+      }
+      line([[401,19],[793,19]],'#392719',13); line([[401,16],[793,16]],'#af82494d',2);
+      line([[401,20],[438,59]],'#6b4e2a',8); line([[793,20],[754,59]],'#6b4e2a',8);
+    }
+    const paintedWinch=window.SceneAssets?.sprites.winch;
+    if(paintedWinch) ctx.drawImage(paintedWinch,500,58,101,76);
+    else {
     ctx.fillStyle = '#3a2a17';
     ctx.save(); ctx.translate(520, 132); ctx.rotate(-.19); ctx.fillRect(-7, -50, 14, 52); ctx.fillStyle = 'rgba(214,166,96,.3)'; ctx.fillRect(-7, -50, 3, 52); ctx.restore();
     ctx.fillStyle = '#3a2a17';
@@ -825,16 +966,49 @@
     ellipse(550, 106, 20, 20, '#1f1a13');
     ellipse(550, 106, 16, 16, '#5c4e39');
     ellipse(550, 106, 7, 7, '#14110d');
-    for (let i = 0; i < 6; i++) {
-      const a = crankAngle * .35 + i * Math.PI / 3;
-      line([[550, 106], [550 + Math.cos(a) * 15, 106 + Math.sin(a) * 15]], '#82704e', 2);
     }
-    // The crank turns with the cable: forward while reeling, backward as the claw pays out.
-    const handleX = 550 + Math.cos(crankAngle) * 13, handleY = 106 + Math.sin(crankAngle) * 13;
-    line([[550, 106], [handleX, handleY]], '#6b5738', 5);
-    ellipse(handleX, handleY, 4.5, 4.5, '#a58b5c');
-    const [elbowX, elbowY, handX, handY] = reach(488, 92, handleX, handleY, 37, 39);
+    const mood = expression(performance.now());
+    const rig = VISUAL.rig, { drum, crank, drive } = rig;
+    const operator = window.SceneAssets?.sprites[mood], shoulder = { x: 488, y: 92 };
+    // The short ratchet stroke leans the operator above boots planted on the catwalk.
+    const stroke = calm.matches ? 0 : Math.sin(crankAngle) * rig.ratchetPx;
+    const operatorHeight = VISUAL.authored.operatorHeight - (operator ? stroke : 0);
+    const operatorX = rig.operatorX + stroke * .2, operatorY = 132 - operatorHeight;
+    const handleX = operator ? operatorX + (rig.gloveU - .5) * operatorHeight * operator.width / operator.height : rig.fallbackGrip.x + stroke * .2;
+    const handleY = operator ? operatorY + rig.gloveV * operatorHeight : rig.fallbackGrip.y + stroke;
+    // Meshed reduction gears and solid axles replace unsupported diagonal drive lines.
+    if (!paintedWinch) {
+      line([[crank.x,crank.y],[drive.x,drive.y],[drum.x,drum.y]],'#211c16',5);
+      line([[crank.x,crank.y],[drive.x,drive.y],[drum.x,drum.y]],'#897252',1.5);
+      drawGear(drive.x,drive.y,drive.radius,-crankAngle * crank.radius / drive.radius,rig.iron);
+      drawGear(crank.x,crank.y,crank.radius,crankAngle,rig.brass);
+      // A bearing clamps the crank spindle to the actual timber frame.
+      polygon([[crank.x-5,crank.y-8],[crank.x+6,crank.y-8],[crank.x+6,crank.y+8],[crank.x-5,crank.y+8]],'#493d2e','#191711',1);
+      for (const y of [crank.y-6,crank.y+6]) ellipse(crank.x+3,y,1,1,'#b49b6c');
+    }
+    ellipse(crank.x,crank.y,3,4,'#342b20'); ellipse(crank.x,crank.y,1.8,2.7,'#bb9859');
+    const crankPath = [[crank.x,crank.y],[handleX+9,crank.y],[handleX+9,handleY],[handleX,handleY]];
+    const forged = ctx.createLinearGradient(handleX+7,0,handleX+11,0);
+    forged.addColorStop(0,rig.iron[2]); forged.addColorStop(.45,rig.iron[0]); forged.addColorStop(1,rig.iron[1]);
+    ctx.save(); ctx.lineCap = ctx.lineJoin = 'round';
+    line(crankPath,'#211b15',5); line(crankPath,forged,3.2);
+    line(crankPath.map(([x,y])=>[x-.5,y-.5]),'#e4cda477',.7);
+    // Both painted gloves close over the same short handle; the grip is drawn behind them.
+    line([[handleX-17,handleY],[handleX+7,handleY]],'#30261b',3.5);
+    line([[handleX-17,handleY-1],[handleX+7,handleY-1]],'#b49a70',.8);
+    ellipse(handleX,handleY,4.5,4.5,'#5e432a');
+    ctx.restore();
+    const [elbowX, elbowY, handX, handY] = reach(shoulder.x, shoulder.y, handleX, handleY, rig.upperArm, rig.forearm);
+    // Feed cable and a steel fairlead continue the drum through the catwalk opening.
+    drawChain({ x: drum.x, y: drum.y+3 }, origin, 0, 0);
+    line([[538,128],[538,122],[562,122],[562,128]],'#5c5544',3);
+    ellipse(origin.x,origin.y-3,6,6,'#25251f');
+    ellipse(origin.x,origin.y-3,4,4,'#938a70');
+    ellipse(origin.x,origin.y,2,2,'#25251f');
     // Ore cart: rusted steel hopper on iron wheels, heaped past the rim.
+    const paintedCart=window.SceneAssets?.sprites.cart;
+    if(paintedCart) ctx.drawImage(paintedCart,646,92,134,53);
+    else {
     const cart = () => { ctx.beginPath(); ctx.moveTo(646, 94); ctx.lineTo(780, 94); ctx.lineTo(764, 132); ctx.lineTo(662, 132); ctx.closePath(); };
     cart();
     const steel = ctx.createLinearGradient(646, 94, 780, 132);
@@ -846,9 +1020,11 @@
     line([[646,95],[780,95]], '#edc47b', 1); line([[650,98],[777,98]], '#171914', 2);
     ctx.globalAlpha=.4; ctx.drawImage(art.surface(404,60,true),646,94,134,40); ctx.globalAlpha=1;
     ctx.restore();
+    }
     // Gold heaped over the rim, irregular as it was shovelled in.
     const jitter = n => { const v = Math.sin(n * 12.9898) * 43758.5453; return v - Math.floor(v); };
-    for (let i = 0; i < 13; i++) {
+    const loadedPieces = Math.ceil(Math.min(1, haul / levels[level][1]) * VISUAL.cartPieces);
+    for (let i = 0; i < loadedPieces; i++) {
       const gx = 648 + i * 10.5 + jitter(i) * 7, gy = 92 - Math.sin(i * .9) * 6 - jitter(i + 7) * 8;
       const s = .8 + jitter(i + 3) * .55;
       polygon([[gx - 8 * s, gy + 5 * s], [gx - 6 * s, gy - 5 * s], [gx + 2 * s, gy - 9 * s], [gx + 8 * s, gy - 1 * s], [gx + 4 * s, gy + 6 * s]], '#987022', '#4e3516');
@@ -858,6 +1034,7 @@
     ctx.globalAlpha = .22 * flicker;
     ctx.drawImage(GLOW, 662, 46, 130, 110);
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if(!paintedCart) {
     for (const wx of [666, 758]) {
       ellipse(wx, 133, 12, 12, '#0f0d0b'); ellipse(wx, 133, 7, 7, '#3a3128');
       ellipse(wx - 2, 130, 2.2, 2.2, '#9c8867');
@@ -868,6 +1045,7 @@
       for (const y of [101, 123]) { ellipse(x, y, 1.7, 1.7, '#0b100e'); ellipse(x-.4,y-.5,.65,.65,'#b99b62'); }
     }
     for (let i=0;i<15;i++) line([[659+i*7,108+i%4],[669+i*7,107+i%4]], '#b6975522', .6);
+    }
     // Lantern post and the single light of the mine.
     line([[622, 94], [622, 80]], '#241d15', 4);
     line([[613, 76], [631, 76]], '#241d15', 3);
@@ -880,12 +1058,18 @@
     ctx.beginPath(); ctx.arc(LAMP.x,LAMP.y-16,5,Math.PI,0); ctx.strokeStyle='#96723a'; ctx.lineWidth=1.5; ctx.stroke();
     line([[LAMP.x-5,LAMP.y-8],[LAMP.x-5,LAMP.y+7]], '#fff2b8', 1);
     line([[LAMP.x-8,LAMP.y+12],[LAMP.x+8,LAMP.y+12]], '#d2a44c', 1);
-    // The miner: a silhouette rimmed by his own lantern.
+    if (operator) {
+      ellipse(rig.operatorX,132,28,4,'#0005');
+      // Keep the complete authored silhouette, including both naturally bent arms and gloves.
+      window.ProspectorArt.draw(ctx,operatorX,operatorY,operatorHeight,mood,artName);
+      return flicker;
+    }
+    // Procedural operator fallback if local images cannot be decoded.
     ctx.save();
     ctx.fillStyle = '#05060a'; ctx.strokeStyle = '#05060a'; ctx.lineCap = 'round';
     ctx.lineWidth = 9;                                                                          // far arm
     ctx.beginPath(); ctx.moveTo(480, 88); ctx.lineTo(468, 112); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(482, 86); ctx.lineTo(elbowX, elbowY); ctx.lineTo(handX, handY); ctx.stroke(); // near arm on the crank
+    ctx.beginPath(); ctx.moveTo(shoulder.x, shoulder.y); ctx.lineTo(elbowX, elbowY); ctx.lineTo(handX, handY); ctx.stroke(); // near arm on the crank
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(452, 110); ctx.lineTo(446, 134); ctx.lineTo(460, 134); ctx.lineTo(468, 112); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo(470, 112); ctx.lineTo(474, 134); ctx.lineTo(488, 134); ctx.lineTo(490, 110); ctx.closePath(); ctx.fill();
@@ -902,50 +1086,57 @@
     ctx.beginPath(); ctx.moveTo(490, 110); ctx.lineTo(488, 134); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(460, 134); ctx.lineTo(467, 112); ctx.stroke();
     const coat = ctx.createLinearGradient(451,85,492,112);
-    coat.addColorStop(0,'#121a19'); coat.addColorStop(1,'#484230');
+    coat.addColorStop(0,daylight ? SKY.coat[0] : '#121a19'); coat.addColorStop(1,daylight ? SKY.coat[1] : '#484230');
     polygon([[451,88],[471,84],[488,90],[485,111],[456,111]], coat);
     line([[465,88],[463,109]], '#887343', 2);
     line([[482,89],[479,109]], '#887343', 2);
-    polygon([[471,72],[481,70],[481,79],[475,84],[469,78]], '#8f734b');
-    polygon([[469,76],[481,76],[478,85],[472,83]], '#a49b7b');
-    line([[488,92],[elbowX,elbowY],[handX,handY]], '#514c37', 7);
-    ellipse(handX,handY,4,3,'#a38a58');
+    polygon([[471,72],[481,70],[481,79],[475,84],[469,78]], daylight ? SKY.skin : '#8f734b');
+    polygon([[469,76],[481,76],[478,85],[472,83]], daylight ? SKY.beard : '#a49b7b');
+    line([[shoulder.x,shoulder.y],[elbowX,elbowY],[handX,handY]], daylight ? SKY.coat[0] : '#514c37', 7);
+    ellipse(handX,handY,4,3,daylight ? SKY.skin : '#a38a58');
     line([[453,115],[450,130]], '#25312c', 8);
     line([[476,115],[480,130]], '#30382e', 8);
     line([[449,133],[459,133]], '#121512', 4);
     line([[478,133],[490,133]], '#121512', 4);
+    window.ProspectorArt.head(ctx, 469, 66, VISUAL.headRadius, expression(performance.now()), artName);
     ctx.restore();
     return flicker;
   }
-  // Two-bone reach: the elbow bends downward and the hand stops at full stretch.
+  function drawGear(x,y,r,rotation,colors) {
+    ctx.save(); ctx.translate(x,y); ctx.scale(.4,1); ctx.rotate(rotation);
+    const metal = ctx.createLinearGradient(-r,-r,r,r);
+    metal.addColorStop(0,colors[0]); metal.addColorStop(.45,colors[1]); metal.addColorStop(1,colors[2]);
+    const teeth = [];
+    for (let i = 0; i < 64; i++) {
+      const a = i * Math.PI / 32, radius = r + (i % 4 < 2 ? 1.4 : -.8);
+      teeth.push([Math.cos(a)*radius,Math.sin(a)*radius]);
+    }
+    polygon(teeth,metal,'#211c16',1);
+    ellipse(0,0,r*.73,r*.73,colors[2],colors[0],.6);
+    for (let i = 0; i < 5; i++) {
+      const a = i * Math.PI * 2 / 5;
+      ellipse(Math.cos(a)*r*.45,Math.sin(a)*r*.45,2,2,'#1c1b16',colors[1],.5);
+    }
+    ellipse(0,0,3,3,colors[0],'#262019',1);
+    ctx.restore();
+  }
+  // Two-bone reach is used only by the procedural operator fallback.
   function reach(sx, sy, tx, ty, upper, fore) {
     const d = Math.max(1, Math.min(upper + fore - .01, Math.hypot(tx - sx, ty - sy))), base = Math.atan2(ty - sy, tx - sx);
     const bend = Math.acos(Math.max(-1, Math.min(1, (upper * upper + d * d - fore * fore) / (2 * upper * d))));
     return [sx + Math.cos(base + bend) * upper, sy + Math.sin(base + bend) * upper, sx + Math.cos(base) * d, sy + Math.sin(base) * d];
   }
-  // A segmented steel chain: every link drawn, bowed and vibrating under load.
+  // Continuous steel cable: subtle flex between ends that stay mechanically attached.
   function drawChain(from, to, tension, now) {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    const dist = Math.max(1, Math.hypot(dx, dy));
-    const links = Math.max(3, Math.min(110, Math.round(dist / 8)));
-    const nx = -dy / dist, ny = dx / dist;
-    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y);
-    ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 3.4; ctx.stroke();
-    for (let i = 1; i <= links; i++) {
-      const t = i / links;
-      const wobble = Math.sin(t * Math.PI) * (tension + Math.sin(now * .05 + t * 9) * tension * .5);
-      const x = from.x + dx * t + nx * wobble, y = from.y + dy * t + ny * wobble;
-      const a = Math.atan2(dy, dx) + (i % 2 ? 0 : Math.PI / 2);
-      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-      const rx = 5.2, ry = 3.2;
-      ctx.beginPath(); ctx.ellipse(0, .8, rx, ry, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = '#26231e'; ctx.lineWidth = 2.1; ctx.stroke();
-      ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-      ctx.strokeStyle = i % 3 ? '#6b6659' : '#514d44'; ctx.lineWidth = 1.3; ctx.stroke();
-      ctx.beginPath(); ctx.ellipse(-.4, -.6, rx * .74, ry * .44, 0, Math.PI, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(206,198,172,.55)'; ctx.lineWidth = .7; ctx.stroke();
-      ctx.restore();
-    }
+    const dx = to.x - from.x, dy = to.y - from.y, dist = Math.max(1, Math.hypot(dx, dy));
+    const bow = Math.min(dist * .035, tension) * (1 + Math.sin(now * .012) * .18);
+    ctx.save(); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo((from.x+to.x)/2-dy/dist*bow,(from.y+to.y)/2+dx/dist*bow,to.x,to.y);
+    ctx.strokeStyle = '#171914'; ctx.lineWidth = VISUAL.rig.cableWidth + 1.8; ctx.stroke();
+    ctx.strokeStyle = '#a49a7f'; ctx.lineWidth = VISUAL.rig.cableWidth; ctx.stroke();
+    ctx.strokeStyle = '#eee0bb'; ctx.lineWidth = .7; ctx.stroke();
+    ctx.restore();
   }
   function drawClaw(p, now) {
     ctx.save(); ctx.translate(p.x, p.y); ctx.scale(1, objectAspect); ctx.rotate(-angle);
@@ -966,14 +1157,14 @@
       ctx.fillStyle = jaw; ctx.fill();
       ctx.strokeStyle = '#12100d'; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.beginPath(); ctx.moveTo(-2.6, 1); ctx.quadraticCurveTo(-6.4, 10, -2.6, 18.5);
-      ctx.strokeStyle = 'rgba(232,222,196,.72)'; ctx.lineWidth = 1.7; ctx.stroke();
+      ctx.strokeStyle = 'rgba(232,222,196,.72)'; ctx.lineWidth = Math.max(1.7, VISUAL.clawOutlinePx / cssScale()); ctx.stroke();
       ctx.restore();
     }
     ellipse(0, -2, 9.5, 8, '#2b271f');
     ellipse(0, -2, 7.5, 6, '#6b6555');
     ellipse(-1.6, -3.4, 3.4, 2.4, '#b8b096');
     ctx.fillStyle = '#3a352c'; ctx.fillRect(-2, -12, 4, 7);
-    ctx.beginPath(); ctx.arc(0, -13, 3, Math.PI, 0);
+    ctx.beginPath(); ctx.arc(0, VISUAL.rig.eyeY, VISUAL.rig.eyeRadius, 0, Math.PI * 2);
     ctx.strokeStyle = '#6b6555'; ctx.lineWidth = 2; ctx.stroke();
     ctx.restore();
   }
@@ -990,7 +1181,7 @@
         ctx.beginPath(); ctx.moveTo(-p.size, -p.size * .4); ctx.lineTo(0, -p.size); ctx.lineTo(p.size * .2, -p.size * .3); ctx.closePath(); ctx.fill();
         ctx.restore();
       } else {
-        const s = p.size * (1 + (1 - fade) * 2.6);
+        const s = Math.max(p.size, calm.matches ? 0 : VISUAL.minParticlePx / cssScale()) * (1 + (1 - fade) * 2.6);
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = fade * .85;
         ctx.drawImage(GLOW, p.x - s * 2.4, p.y - s * 2.4, s * 4.8, s * 4.8);
@@ -1006,13 +1197,13 @@
   function draw(now) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(fit.sx, 0, 0, fit.sy, 0, fit.oy);
-    const screen = [0, -fit.oy / fit.sy, W, canvas.height / fit.sy];   // the whole canvas, in field units
+    ctx.setTransform(fit.sx, 0, 0, fit.sy, fit.ox, fit.oy);
+    const screen = [-fit.ox / fit.sx, -fit.oy / fit.sy, canvas.width / fit.sx, canvas.height / fit.sy];   // the whole canvas, in field units
     ctx.save();
     const amp = shakeMag * (shakeTime / .4);
     if (amp > .08) ctx.translate(Math.sin(now * .09) * amp, Math.cos(now * .13) * amp * .7);
     ctx.drawImage(background, ...screen);
-    art.drawAmbient?.(ctx, now, { aspect: objectAspect });
+    art.drawAmbient?.(ctx, calm.matches ? 0 : now, { aspect: objectAspect, scale: cssScale(), view: { left: screen[0], top: screen[1], right: screen[0] + screen[2], bottom: screen[1] + screen[3] }, pulse: Math.max(0, (pulseUntil - now) / VISUAL.pulseMs), entrance: calm.matches ? 0 : Math.max(0, 1 - (now - entranceAt) / VISUAL.entranceMs) });
     // No ctx.filter here: a full-scene filter halved the frame rate.
     ctx.save();
     const litScene = art.lit !== false;
@@ -1026,12 +1217,13 @@
       ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     }
     // Dust motes drifting through the beam.
+    const ambientNow = calm.matches ? 0 : now;
     for (let i = 0; litScene && i < 64; i++) {
-      const t = now * .00004 + i * .137;
-      const dx = LAMP.x + Math.sin(i * 2.7 + now * .0004) * (60 + i * 9);
+      const t = ambientNow * .00004 + i * .137;
+      const dx = LAMP.x + Math.sin(i * 2.7 + ambientNow * .0004) * (60 + i * 9);
       const dy = LAMP.y + ((t * 900 + i * 63) % (H + 60));
       const near = 1 - Math.min(1, Math.abs(dx - LAMP.x) / 620);
-      ctx.globalAlpha = .055 + near * .24 * (.6 + Math.sin(now * .002 + i) * .4);
+      ctx.globalAlpha = .055 + near * .24 * (.6 + Math.sin(ambientNow * .002 + i) * .4);
       ctx.fillStyle = '#ffdca4';
       const size = .45 + (i % 3) * .4;
       ctx.fillRect(dx, dy, size, size);
@@ -1043,6 +1235,7 @@
       lip.addColorStop(0, 'rgba(0,0,0,.6)'); lip.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = lip; ctx.fillRect(396, 145, 404, 47);
     }
+    const valueLabels = [], valueFont = FEEL.valueFontPx / cssScale(), labelGap = FEEL.labelGapPx / cssScale();
     for (const o of objects) {
       if (o.taken) continue;
       // Ambient occlusion: the rock is darker right around a buried object.
@@ -1053,22 +1246,38 @@
       ctx.fillRect(-o.radius * 2.1, -o.radius * 2.1, o.radius * 4.2, o.radius * 4.2);
       ctx.restore();
       if (o.type === 'rock') ctx.globalAlpha = .92;
-      if (o.type !== 'rock' && o.type !== 'tnt' && !o.speed) drawGlow(o.x, o.y, o.radius, now, o.type === 'diamond' || o.type === 'gem' ? 3.4 : 3.7, o.type === 'large' ? .24 : .2, objectAspect);
+      if (litScene && o.type !== 'rock' && o.type !== 'tnt' && !o.speed) drawGlow(o.x, o.y, o.radius, now, o.type === 'diamond' || o.type === 'gem' ? 3.4 : 3.7, o.type === 'large' ? .24 : .2, objectAspect);
       drawObject(o);
       ctx.globalAlpha = 1;
       if (now < revealUntil && o.value > 0) {
-        ctx.save(); ctx.translate(o.x, o.y - (o.radius + 10) * objectAspect); ctx.scale(1, objectAspect);
-        ctx.font = '600 12px Georgia'; ctx.textAlign = 'center'; ctx.lineWidth = 4;
-        ctx.strokeStyle = '#080c0e'; ctx.strokeText(money(o.value), 0, 0);
-        ctx.fillStyle = '#f1ce7e'; ctx.fillText(money(o.value), 0, 0);
+        const text = money(catchValue(o));
+        ctx.save(); ctx.font = `600 ${valueFont}px Arial, sans-serif`;
+        const label = { text, x: o.x, y: o.y - o.radius - 10, anchorY: o.y - o.radius, width: ctx.measureText(text).width + labelGap * 2 };
         ctx.restore();
+        const height = valueFont + labelGap * 2;
+        // ponytail: O(n²) packing for a few dozen labels; spatial bins if maps grow much denser.
+        while (valueLabels.some(other => Math.abs(other.x - label.x) < (other.width + label.width) / 2 && Math.abs(other.y - label.y) < height)) label.y -= height;
+        valueLabels.push(label);
       }
     }
+    // Labels sit above all sprites; shifted prices retain a leader to their treasure.
+    ctx.save(); ctx.font = `600 ${valueFont}px Arial, sans-serif`; ctx.textAlign = 'center';
+    for (const label of valueLabels) {
+      if (label.y < label.anchorY - 10) line([[label.x, label.anchorY], [label.x, label.y + labelGap]], '#f1ce7e', 1 / cssScale());
+    }
+    for (const label of valueLabels) {
+      ctx.lineWidth = 4 / cssScale();
+      ctx.strokeStyle = '#080c0e'; ctx.strokeText(label.text, label.x, label.y);
+      ctx.fillStyle = '#f1ce7e'; ctx.fillText(label.text, label.x, label.y);
+    }
+    ctx.restore();
     const p = hookPosition();
     const reel = hookState === 'back' && caught ? Math.min(1, caught.weight / 4) : 0;
-    drawChain({ x: origin.x, y: origin.y - 20 * objectAspect }, p, hookState === 'back' ? .6 + reel * 1.6 : 3, now);
+    const eyeTop = VISUAL.rig.eyeY - VISUAL.rig.eyeRadius;
+    drawChain(origin, { x: p.x + Math.sin(angle) * eyeTop, y: p.y + Math.cos(angle) * eyeTop * objectAspect }, hookState === 'back' ? .6 + reel * 1.6 : 3, calm.matches ? 0 : now);
     if (caught) drawObject(caught, p.x, p.y + caught.radius * .95 * objectAspect);
     drawClaw(p, now);   // the claw grips from above, so it draws over the catch
+    drawSpectacle(p, now);
     // A faint second pass warms the treasure without obscuring its silhouette.
     if (litScene) {
       ctx.globalCompositeOperation = 'lighter';
@@ -1082,7 +1291,7 @@
       const grow = Math.min(1, (1.6 - pop.life) * 6), alpha = Math.min(1, pop.life);
       ctx.save(); ctx.globalAlpha = alpha;
       ctx.translate(pop.x, pop.y); ctx.scale(.6 + grow * .4, (.6 + grow * .4) * objectAspect);
-      ctx.font = '700 32px Fraunces, Georgia, serif'; ctx.textAlign = 'center';
+      ctx.font = `700 ${Math.max(32, VISUAL.rewardFontPx / cssScale())}px Georgia, serif`; ctx.textAlign = 'center';
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(GLOW, -70, -55, 140, 110);
       ctx.globalCompositeOperation = 'source-over';
@@ -1092,19 +1301,51 @@
       ctx.fillStyle = grad; ctx.fillText(pop.text, 0, 0);
       ctx.restore();
     }
-    if (litScene) ctx.drawImage(vignette, ...screen);
+    if (litScene) {
+      ctx.globalAlpha = window.SceneAssets?.backgrounds.cavern ? VISUAL.authored.vignetteAlpha : 1;
+      ctx.drawImage(vignette, ...screen); ctx.globalAlpha = 1;
+    }
     ctx.restore();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (flash) { ctx.fillStyle = `rgba(${flash.rgb},${flash.a})`; ctx.fillRect(0, 0, canvas.width, canvas.height); }
+    drawProspector(now);
     if (banner) drawBanner(now);
     $('toast').classList.toggle('visible', now < toastUntil);
+  }
+  function drawSpectacle(p, now) {
+    const palette = VISUAL.palettes[artName], scale = cssScale();
+    if (calm.matches) { rings = []; trail = []; return; }
+    trail = trail.filter(point => now - point.start < VISUAL.trailMs);
+    if (phase === 'playing' && hookState !== 'swing' && now - trailAt >= VISUAL.trailIntervalMs) {
+      trailAt = now; trail.push({ x: p.x, y: p.y, start: now }); trail = trail.slice(-VISUAL.maxTrail);
+    }
+    ctx.save(); ctx.lineCap = 'round';
+    for (let i = 1; i < trail.length; i++) {
+      ctx.globalAlpha = VISUAL.trailAlpha * (1 - (now - trail[i].start) / VISUAL.trailMs);
+      line([[trail[i-1].x,trail[i-1].y],[trail[i].x,trail[i].y]], palette.gold, VISUAL.clawOutlinePx / scale);
+    }
+    rings = rings.filter(ring => now - ring.start < VISUAL.ringMs);
+    for (const ring of rings) {
+      const t = (now - ring.start) / VISUAL.ringMs;
+      ctx.globalAlpha = (1 - t) * VISUAL.ringAlpha;
+      ctx.strokeStyle = ring.gem ? palette.gem : palette.gold; ctx.lineWidth = VISUAL.clawOutlinePx / scale;
+      ctx.beginPath(); ctx.arc(ring.x,ring.y,ring.radius * (1 + t),0,Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawProspector(now) {
+    const mood = expression(now), key = artName + ':' + mood;
+    if (key !== portraitKey) {
+      portraitKey = key; canvas.dataset.expression = mood;
+      for (const portrait of document.querySelectorAll('.prospector-portrait')) window.ProspectorArt.paint(portrait, mood, artName);
+    }
   }
   // Title cards are drawn in screen pixels so they read the same on phones and monitors.
   function drawBanner(now) {
     const t = (now - banner.start) / 1000, hold = 1.9;
     if (t > hold + .5) { banner = null; return; }
     const enter = 1 - Math.pow(1 - Math.min(1, t / .4), 3), alpha = enter * (1 - Math.max(0, (t - hold) / .5));
-    const cw = canvas.width, size = Math.min(cw * .06, canvas.height * .085), cy = fit.oy + H * fit.sy * .42;
+    const cw = canvas.width, dpr = cw / canvas.clientWidth, size = Math.min(cw * FEEL.bannerWidthRatio, canvas.height * .085), cy = fit.oy + H * fit.sy * .42;
     const tint = art.bannerTint || '4,8,10', band = ctx.createLinearGradient(0, 0, cw, 0);
     band.addColorStop(0, `rgba(${tint},0)`); band.addColorStop(.22, `rgba(${tint},.8)`);
     band.addColorStop(.78, `rgba(${tint},.8)`); band.addColorStop(1, `rgba(${tint},0)`);
@@ -1115,27 +1356,29 @@
     ctx.fillStyle = rule; const hair = Math.max(1, size * .03);
     ctx.fillRect(0, cy - size * 1.4, cw, hair); ctx.fillRect(0, cy + size * 1.35 - hair, cw, hair);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `700 ${Math.round(size * .26)}px Arial, sans-serif`; ctx.letterSpacing = `${Math.round(size * .08)}px`;
+    ctx.font = `700 ${Math.max(FEEL.bannerKickerPx * dpr, Math.round(size * .26))}px Arial, sans-serif`; ctx.letterSpacing = `${Math.round(size * .08)}px`;
     ctx.fillStyle = '#e8c57a'; ctx.fillText(banner.kicker, cw / 2, cy - size * .88);
     ctx.letterSpacing = '0px';
-    ctx.font = `700 ${Math.round(size)}px Georgia, serif`;
+    ctx.font = `500 ${Math.round(size)}px Georgia, serif`;
     const fitWidth = Math.min(1, cw * .9 / ctx.measureText(banner.title).width), grow = calm.matches ? 1 : 1.12 - .12 * enter;
     ctx.save(); ctx.translate(cw / 2, cy); ctx.scale(fitWidth * grow, fitWidth * grow);
     const ink = ctx.createLinearGradient(0, -size * .5, 0, size * .5);
-    ink.addColorStop(0, '#fff6d2'); ink.addColorStop(.5, '#ffd05e'); ink.addColorStop(1, '#d98f22');
-    ctx.lineWidth = size * .1; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(12,8,3,.9)'; ctx.strokeText(banner.title, 0, 0);
+    ink.addColorStop(0, '#fff3d5'); ink.addColorStop(.5, '#ead4a0'); ink.addColorStop(1, '#c4a06a');
+    ctx.shadowColor = '#090807cc'; ctx.shadowBlur = 5*dpr; ctx.shadowOffsetY = 2*dpr;
     ctx.fillStyle = ink; ctx.fillText(banner.title, 0, 0);
     ctx.restore();
-    ctx.font = `${Math.round(size * .3)}px Arial, sans-serif`; ctx.fillStyle = '#f3e7cf';
-    ctx.fillText(banner.detail, cw / 2, cy + size * .86);
+    ctx.font = `${Math.max(FEEL.valueFontPx * dpr, Math.round(size * .3))}px Arial, sans-serif`; ctx.fillStyle = '#f3e7cf';
+    ctx.fillText(banner.detail, cw / 2, cy + size * .86, cw * .92);
     ctx.restore();
   }
   function frame(now) {
-    const elapsed = Math.min((now-lastFrame)/1000 || 0, .1);lastFrame=now;
+    const elapsed = Math.min((now-lastFrame)/1000 || 0, FEEL.frameCap);lastFrame=now;
     if (flash && (flash.a -= elapsed * 2.4) <= 0) flash = null;
     // Small physics steps keep a fast hook from tunneling through tiny diamonds.
+    if (phase === 'playing' && now >= deadline) finishLevel();
     if (hitStop > 0) hitStop -= elapsed;
-    else {let remaining=elapsed;while(remaining>0){const step=Math.min(remaining,1/120);update(step,now);remaining-=step;}}
+    else {let remaining=elapsed;while(remaining>0){const step=Math.min(remaining,FEEL.physicsStep);update(step,now);remaining-=step;}}
+    if (phase === 'playing') updateHUD();
     if (phase === 'playing' && now - lastSave >= 1000) saveProgress();
     draw(now);requestAnimationFrame(frame);
   }
@@ -1175,8 +1418,30 @@
       setTimeout(() => nodes.oscs.forEach(o => { try { o.stop(); } catch {} }), 600);
     }
   }
-  $('settings').onclick = () => { $('settings-overlay').hidden = false; $('settings-close').focus(); };
-  $('settings-close').onclick = () => { $('settings-overlay').hidden = true; if (!$('welcome-overlay').hidden) $('welcome-new').focus(); else canvas.focus({ preventScroll: true }); };
+  let settingsWasPlaying = false, settingsFocus = null;
+  function openSettings() {
+    settingsFocus = document.activeElement;
+    settingsWasPlaying = phase === 'playing';
+    if (settingsWasPlaying) {
+      time = Math.max(0, (deadline - performance.now()) / 1000);
+      if (!time) { finishLevel(); settingsWasPlaying = false; }
+      else { phase = 'paused'; updateHUD(); saveProgress(); }
+    }
+    $('settings-overlay').hidden = false; syncModal(); $('settings-close').focus();
+  }
+  function closeSettings() {
+    $('settings-overlay').hidden = true;
+    if (settingsWasPlaying && phase === 'paused' && !document.hidden) {
+      phase = 'playing'; deadline = performance.now() + time * 1000;
+      if (music) updateMusic();
+    } else if (phase === 'paused' && $('overlay').hidden) renderPause();
+    settingsWasPlaying = false; updateHUD(); saveProgress();
+    syncModal();
+    if (settingsFocus?.isConnected && !settingsFocus.closest('[inert]') && !settingsFocus.disabled) settingsFocus.focus({ preventScroll: true });
+    else focusGame();
+  }
+  $('settings').onclick = openSettings;
+  $('settings-close').onclick = closeSettings;
   $('settings-overlay').addEventListener('pointerdown', event => { if (event.target === $('settings-overlay')) $('settings-close').onclick(); });
   $('sound-toggle').onchange = () => { sound = $('sound-toggle').checked; sfx('ui'); saveProgress(); };
   $('music-toggle').onchange = () => { music = $('music-toggle').checked; try { localStorage.setItem('gm-music', music ? '1' : '0'); } catch {} updateMusic(); };
@@ -1184,6 +1449,12 @@
   $('sound-toggle').checked = sound;
   $('music-toggle').checked = music;
   $('shake-range').value = Math.round(shakeScale * 100);
+  calm.addEventListener('change', () => {
+    if (!calm.matches) return;
+    shakeMag = 0; shakeTime = 0; flash = null; rings = []; trail = [];
+    $('dialog').getAnimations().forEach(animation => animation.cancel());
+    rollScore(bank + haul, true);
+  });
   for (const radio of document.querySelectorAll('input[name=art]')) {
     radio.checked = radio.value === artName;
     radio.onchange = () => { if (radio.checked) applyArt(radio.value); };
@@ -1191,7 +1462,7 @@
   // Press feedback: a gold-dust burst where the finger lands, drawn by the canvas particle system.
   function canvasPoint(event) {
     const rect = canvas.getBoundingClientRect(), dpr = canvas.width / rect.width;
-    return { x: (event.clientX - rect.left) * dpr / fit.sx, y: ((event.clientY - rect.top) * dpr - fit.oy) / fit.sy };
+    return { x: ((event.clientX - rect.left) * dpr - fit.ox) / fit.sx, y: ((event.clientY - rect.top) * dpr - fit.oy) / fit.sy };
   }
   for (const button of document.querySelectorAll('.action-item')) {
     button.addEventListener('pointerdown', event => { if (!button.disabled) burst(canvasPoint(event), 'gold'); });
@@ -1205,20 +1476,35 @@
   };
   $('dynamite').onclick=explode;$('pause').onclick=pause;
   canvas.addEventListener('pointerdown',event=>{event.preventDefault();canvas.focus({preventScroll:true});if(music&&audio)audio.resume();drop();});
-  document.addEventListener('keydown',event=>{
-    if(event.key==='Tab'&&!$('overlay').hidden){const buttons=[...$('dialog').querySelectorAll('button:not(:disabled)')];const first=buttons[0],last=buttons.at(-1);if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}return;}
-    if(event.repeat)return;
-    if(event.key==='Escape'&&!$('settings-overlay').hidden){$('settings-close').onclick();return;}
-    if(event.key==='Escape'||event.key.toLowerCase()==='p'){pause();return;}
-    if(phase!=='playing')return;
-    if(event.key==='ArrowDown'||(event.code==='Space'&&document.activeElement.tagName!=='BUTTON')){event.preventDefault();drop();}
-    if(event.key.toLowerCase()==='d'){event.preventDefault();explode();}
+  document.addEventListener('keydown', event => {
+    const modal = activeModal();
+    if (modal) {
+      if (event.key === 'Tab') {
+        const controls = [...modal.querySelectorAll('button:not(:disabled), input:not(:disabled), [tabindex="0"]')];
+        const first = controls[0], last = controls.at(-1), focused = document.activeElement;
+        if (!modal.contains(focused) || (event.shiftKey ? focused === first : focused === last)) {
+          event.preventDefault(); (event.shiftKey ? last : first)?.focus();
+        }
+      } else if (event.key === 'Escape' && !event.repeat) {
+        event.preventDefault();
+        if (modal === $('settings-overlay')) closeSettings();
+        else if (modal === $('overlay') && phase === 'paused') pause();
+        else if (modal === $('overlay')) $('guide-back')?.click();
+      } else if (modal === $('overlay') && phase === 'paused' && event.key.toLowerCase() === 'p' && !event.repeat) pause();
+      return;
+    }
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest('input,select,textarea,[contenteditable]')) return;
+    if (event.key === 'Escape' || event.key.toLowerCase() === 'p') { pause(); return; }
+    if (phase !== 'playing') return;
+    if (event.key === 'ArrowDown' || (event.code === 'Space' && !event.target.closest('button'))) { event.preventDefault(); drop(); }
+    if (event.key.toLowerCase() === 'd') { event.preventDefault(); explode(); }
   });
-  document.addEventListener('visibilitychange',()=>{if(document.hidden){if(phase==='playing')pause();else saveProgress();}});
-  window.addEventListener('pagehide',()=>{if(phase==='playing')pause();else saveProgress();});
+  document.addEventListener('visibilitychange',()=>{if(document.hidden){settingsWasPlaying=false;if(phase==='playing')pause();else saveProgress();}});
+  window.addEventListener('pagehide',()=>{settingsWasPlaying=false;if(phase==='playing')pause();else saveProgress();});
   paintBackground();objects=makeMap(0);updateHUD();
+  window.SceneAssets.ready.then(() => { portraitKey = ''; paintBackground(level); });
   const welcome = $('welcome-overlay');
-  function showWelcome() { welcome.hidden = false; welcome.querySelector('button:not(:disabled)')?.focus(); }
+  function showWelcome() { $('overlay').hidden = true; welcome.hidden = false; focusGame(); }
   // Probe storage so Continue only lights up for a usable expedition.
   db.saves.get('expedition')
     .then(save => {
@@ -1245,7 +1531,7 @@
     $('welcome-new').disabled = false;
     $('welcome-continue').disabled = false;
     welcome.hidden = loaded;
-    if (loaded) $('dialog').querySelector('button')?.focus();
+    if (loaded) focusGame();
     else showWelcome();
   };
   $('welcome-guide').onclick = () => {
@@ -1265,7 +1551,16 @@
       <button class="primary" id="guide-back">Back</button>`);
     $('guide-back').onclick = showWelcome;
   };
-  $('welcome-settings').onclick = () => { $('settings-overlay').hidden = false; $('settings-close').focus(); };
+  $('welcome-settings').onclick = openSettings;
+  window.render_game_to_text = () => JSON.stringify({
+    coordinates: 'Field units: origin top-left; x right, y down. Uniform viewport scale.',
+    phase, modal: activeModal()?.id ?? null, art: artName, mine: level + 1,
+    score: bank + haul, displayedScore: shownScore, bank, haul, target: levels[level][1], secondsLeft: time,
+    viewport: { width: canvas.clientWidth, height: canvas.clientHeight, ...fit },
+    hook: { state: hookState, angle, length, ...hookPosition(), caughtId: caught?.id ?? null },
+    supplies: { dynamite, strength, book, magnet, magnetArmed },
+    objects: objects.map(obj => ({ id: obj.id, type: obj.type, x: obj.x, y: obj.y, radius: obj.radius, value: catchValue(obj), taken: obj.taken }))
+  });
   showWelcome();
   requestAnimationFrame(frame);
 })();

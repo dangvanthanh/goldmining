@@ -2,6 +2,7 @@
 // Static geology is rasterized once per level. No image assets or per-frame noise;
 // drawAmbient animates only a few cheap accents (water drips, crystal glints).
 window.CavernArt = (() => {
+  const cfg = VisualConstants.cavern;
   const bannerTint = '4,8,10';   // title cards sit on a band of cave shadow
   let drips = [], sparkles = [];   // live accents, positioned by the last painted board
   function random(seed) {
@@ -21,9 +22,11 @@ window.CavernArt = (() => {
   // The caller maps the 1100×580 field onto the canvas; view.top/bottom are the
   // extra rows visible on tall screens, so rock must reach past 0..h.
   function paintBackground(canvas, seed, lamp, view = { top: 0, bottom: 580 }) {
-    const c = canvas.getContext('2d'), w = 1100, h = 580, { top, bottom } = view;
+    if (window.SceneAssets?.paintBackground('cavern', canvas, view)) return;
+    const c = canvas.getContext('2d'), w = 1100, h = 580, { top, bottom, left = 0, right = w } = view;
+    const span = right - left;
     const rand = random(90210 + seed * 173);
-    c.fillStyle = '#070b0e'; c.fillRect(0, top, w, bottom - top);
+    c.fillStyle = '#070b0e'; c.fillRect(left, top, span, bottom - top);
     // The black ceiling opens into a deep, amber-filled ravine, not a flat dirt wall.
     shape(c, [[120,190],[200,140],[300,180],[425,100],[600,65],[770,112],[950,35],[w,bottom],[0,bottom]], '#101311');
     for (let layer = 0; layer < 4; layer++) {
@@ -37,6 +40,9 @@ window.CavernArt = (() => {
       shape(c, points, g);
     }
     glow(c, 365, 495, 550, 390, [[0,'#d1892480'],[.35,'#a4662028'],[1,'#54381400']]);
+    // Cool recesses separate the amber working shaft from its distant walls.
+    glow(c, 215, 295, 310, 340, [[0,'#498d8420'],[.5,'#1b4a4620'],[1,'#0b282700']]);
+    glow(c, 910, 340, 230, 310, [[0,'#6ea79c18'],[1,'#18373400']]);
     // Recessed, eroded flutes keep the central play field quiet and deep.
     for (let i = 0; i < 27; i++) {
       const x = 130 + rand() * 850, y = 70 + rand() * 420;
@@ -47,19 +53,37 @@ window.CavernArt = (() => {
     }
     // Shelves wrap around tall buttresses. Their irregular contours avoid a
     // repeated diagonal stripe pattern at full-screen scale.
-    const left = [[0,0],[111,0],[139,35],[145,75],[190,111],[179,137],[139,160],[123,202],[132,250],[159,291],[147,335],[172,396],[207,448],[230,489],[154,535],[0,580]];
-    const right = [[w,0],[930,0],[915,65],[874,101],[850,145],[789,180],[805,217],[779,257],[796,298],[767,333],[758,376],[728,414],[722,455],[666,499],[627,550],[w,h]];
-    const reach = ([x, y]) => [x, y === 0 ? top : y === h ? bottom : y];
-    cliff(left.map(reach), false); cliff(right.map(reach), true);
+    const leftCliff = [[0,0],[111,0],[139,35],[145,75],[190,111],[179,137],[139,160],[123,202],[132,250],[159,291],[147,335],[172,396],[207,448],[230,489],[154,535],[0,580]];
+    const rightCliff = [[w,0],[930,0],[915,65],[874,101],[850,145],[789,180],[805,217],[779,257],[796,298],[767,333],[758,376],[728,414],[722,455],[666,499],[627,550],[w,h]];
+    const reach = ([x, y]) => [x === 0 ? left : x === w ? right : x, y === 0 ? top : y === h ? bottom : y];
+    cliff(leftCliff.map(reach), false); cliff(rightCliff.map(reach), true);
+    // Mineral seams are embedded in the outer walls, duller than collectible gems.
+    for(let i=0;i<cfg.seamCount;i++) {
+      const side=i%2, x=side?1000-i*7:45+i*11, y=170+i*45;
+      c.beginPath(); c.moveTo(x,y); c.bezierCurveTo(x-18,y+34,x+16,y+52,x-4,y+92);
+      c.strokeStyle=cfg.seamShadow; c.lineWidth=5; c.stroke();
+      c.strokeStyle=cfg.seamColor; c.lineWidth=1.3; c.stroke();
+    }
+    for(const [x,y,size] of cfg.mineralPositions) {
+      glow(c,x,y,size*2,size*1.7,[[0,'#69a69a15'],[1,'#69a69a00']]);
+      for(let i=0;i<3;i++) {
+        const dx=x+(i-1)*size*.32, base=y+size*.35, tip=y-size*(.5+(i%2)*.5);
+        shape(c,[[dx-size*.13,base],[dx-size*.16,tip+size*.15],[dx,tip],[dx+size*.14,tip+size*.12],[dx+size*.1,base]],cfg.mineral,cfg.mineralShade,.9);
+        shape(c,[[dx,base],[dx,tip],[dx+size*.14,tip+size*.12],[dx+size*.1,base]],cfg.mineralShade);
+        c.beginPath(); c.moveTo(dx,tip); c.lineTo(dx-size*.1,tip+size*.17); c.lineTo(dx-size*.08,base);
+        c.strokeStyle=cfg.mineralLight+'50'; c.lineWidth=.8; c.stroke();
+      }
+      shape(c,[[x-size*.6,y+size*.5],[x-size*.25,y+size*.2],[x+size*.5,y+size*.4],[x+size*.6,y+size*.65]],'#17251e');
+    }
     function cliff(outline, rightSide) {
       c.save(); shape(c, outline, '#302414'); c.clip();
       const g = c.createLinearGradient(rightSide ? w : 0, 0, rightSide ? 700 : 210, 0);
       g.addColorStop(0, '#080c0c'); g.addColorStop(.45, '#2b1e12'); g.addColorStop(.8, '#82521c'); g.addColorStop(1, '#d49332');
-      c.fillStyle = g; c.fillRect(0,top,w,bottom-top);
+      c.fillStyle = g; c.fillRect(left,top,span,bottom-top);
       // Unequal beds split into broad angular blocks, with black undercuts.
       for (let row = -8; row < 43; row++) {
         const y = row*19 + rand()*12, points=[];
-        for (let x=0;x<=w;x+=14) {
+        for (let x=left;x<=right;x+=14) {
           const slope = rightSide ? -.38 : .24;
           const ripple = Math.sin(x*.014+row*.37)*12 + Math.sin(x*.047+row*.8)*3;
           points.push([x,y+(x-(rightSide?800:100))*slope+ripple]);
@@ -109,15 +133,22 @@ window.CavernArt = (() => {
     }
     glow(c, 833, 121, 95, 72, [[0,'#e3a13c48'],[.45,'#b8792420'],[1,'#b8792400']]);
     // Narrow path on the cavern floor and damp, gold-lit sediment.
-    shape(c, [[0,bottom],[215,511],[340,491],[435,501],[600,532],[w,bottom]], '#342715');
+    shape(c, [[left,bottom],[215,511],[340,491],[435,501],[600,532],[right,bottom]], '#342715');
     glow(c, 337, 521, 285, 39, [[0,'#fff1aaff'],[.12,'#ffbd36ee'],[.45,'#ce8b2f55'],[1,'#5b441600']]);
+    // A thin, still pool catches the cool wall light below the last ore row.
+    const poolY=Math.min(cfg.poolY,bottom-24);
+    glow(c,cfg.poolX,poolY,cfg.poolWidth,14,[[0,cfg.poolColor],[1,'#77bcb000']]);
+    for(let i=0;i<4;i++) {
+      c.beginPath(); c.ellipse(cfg.poolX+i*5,poolY+i*2,cfg.poolWidth*(.65-i*.1),1.5+i*.25,0,0,Math.PI);
+      c.strokeStyle=cfg.poolLight; c.lineWidth=.6; c.stroke();
+    }
     for (let i=0;i<210;i++) {
-      const y = 510+rand()*(bottom-510), x = rand()*w;
+      const y = 510+rand()*(bottom-510), x = left+rand()*span;
       c.fillStyle = rand()>.6 ? '#c4a05240' : '#03090980'; c.fillRect(x,y,2+rand()*19,.4+rand()*1.4);
     }
     // Fine sandstone pits with directional highlights, baked into the geology.
     for(let i=0;i<23000;i++) {
-      const x=rand()*w,y=top+rand()*(bottom-top),r=.2+rand()*1.3;
+      const x=left+rand()*span,y=top+rand()*(bottom-top),r=.2+rand()*1.3;
       c.fillStyle=rand()>.55?'#e3ad4809':'#02070922';
       c.fillRect(x,y,r*2,r);
     }
@@ -164,7 +195,7 @@ window.CavernArt = (() => {
     });
     // Foreground rubble frames the floor without covering collectible hit targets.
     for (let i=0;i<20;i++) {
-      const x=rand()*w, y=564+rand()*(bottom-556), r=10+rand()*48;
+      const x=left+rand()*span, y=564+rand()*(bottom-556), r=10+rand()*48;
       shape(c, [[x-r,y+10],[x-r*.7,y-r*.2],[x-r*.1,y-r*.48],[x+r*.65,y-r*.12],[x+r,y+15]], '#0b100f', '#514a2b55');
     }
     glow(c, lamp.x, lamp.y+30, 240, 165, [[0,'#b477271f'],[1,'#b4772700']]);
@@ -172,7 +203,10 @@ window.CavernArt = (() => {
   // Drops swell on each stalactite tip, fall through the lantern light and splash.
   // Everything derives from the clock, so there is no per-drop state to update.
   function drawAmbient(ctx, now, env) {
+    if (window.SceneAssets?.backgrounds.cavern) { window.SceneAssets.ambient(ctx,now,env,'cavern'); return; }
     const t = now / 1000, gravity = 900;
+    const v = VisualConstants, palette = v.palettes.cavern;
+    if (env.pulse || env.entrance) glow(ctx, 700, 92, 240, 170, [[0, `rgba(${palette.glow},${v.pulseAlpha * Math.max(env.pulse || 0, env.entrance || 0)})`], [1, `rgba(${palette.glow},0)`]]);
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
     for (const s of sparkles) {
       const a = Math.pow(Math.max(0, Math.sin(t * s.rate + s.phase)), 14);

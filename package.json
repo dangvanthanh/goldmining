@@ -7,6 +7,8 @@
   "type": "commonjs",
   "main": "game.js",
   "scripts": {
-    "serve": "python -m http.server"
+    "serve": "python3 -m http.server 8000",
+    "check": "node --check scene-assets.js && node --check Constants.js && node --check EventBus.js && node --check prospector-art.js && node --check game.js && node --check cavern-art.js && node --check sky-art.js && node --check classic-art.js && node --check smoke-check.cjs",
+    "smoke": "node smoke-check.cjs"
   }
 }

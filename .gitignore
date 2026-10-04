@@ -1,2 +1,4 @@
 .dream-loop/
-.dream-loop/
+.agents/
+.pi/
+skills-lock.json
