@@ -4,11 +4,14 @@
   "description": "Gold mining",
   "license": "MIT",
   "author": "Dang Van Thanh",
-  "type": "commonjs",
-  "main": "game.js",
+  "main": "src/main.js",
+  "type": "module",
   "scripts": {
     "serve": "python3 -m http.server 8000",
-    "check": "node --check scene-assets.js && node --check Constants.js && node --check EventBus.js && node --check prospector-art.js && node --check game.js && node --check cavern-art.js && node --check sky-art.js && node --check classic-art.js && node --check smoke-check.cjs",
+    "check": "node scripts/check.cjs",
+    "lint": "bunx oxlint src scripts",
+    "format:check": "bunx oxfmt --check src scripts",
+    "format": "bunx oxfmt src scripts",
     "smoke": "node smoke-check.cjs"
   }
 }
