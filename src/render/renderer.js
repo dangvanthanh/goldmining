@@ -259,7 +259,7 @@ export function createRenderer({
       if (now < frame.state.revealUntil && o.value > 0) {
         const text = money(catchValue(o));
         ctx.save();
-        ctx.font = `600 ${valueFont}px Arial, sans-serif`;
+        ctx.font = `600 ${valueFont}px "Departure Mono", monospace`;
         const label = {
           text,
           x: o.x,
@@ -287,7 +287,7 @@ export function createRenderer({
   function drawValueLabels(valueLabels) {
     const { valueFont, labelGap } = labelMetrics();
     ctx.save();
-    ctx.font = `600 ${valueFont}px Arial, sans-serif`;
+    ctx.font = `600 ${valueFont}px "Departure Mono", monospace`;
     ctx.textAlign = "center";
     for (const label of valueLabels) {
       if (label.y < label.anchorY - 10)
@@ -339,7 +339,7 @@ export function createRenderer({
       ctx.globalAlpha = alpha;
       ctx.translate(pop.x, pop.y);
       ctx.scale(0.6 + grow * 0.4, (0.6 + grow * 0.4) * objectAspect);
-      ctx.font = `700 ${Math.max(32, visual.rewardFontPx / cssScale())}px Georgia, serif`;
+      ctx.font = `700 ${Math.max(32, visual.rewardFontPx / cssScale())}px "Departure Mono", monospace`;
       ctx.textAlign = "center";
       ctx.globalCompositeOperation = "lighter";
       ctx.drawImage(GLOW, -70, -55, 140, 110);
@@ -485,12 +485,12 @@ export function createRenderer({
     ctx.fillRect(0, cy + size * 1.35 - hair, cw, hair);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `700 ${Math.max(FEEL.bannerKickerPx * dpr, Math.round(size * 0.26))}px Arial, sans-serif`;
+    ctx.font = `700 ${Math.max(FEEL.bannerKickerPx * dpr, Math.round(size * 0.26))}px "Departure Mono", monospace`;
     ctx.letterSpacing = `${Math.round(size * 0.08)}px`;
     ctx.fillStyle = "#e8c57a";
     ctx.fillText(frame.fx.banner.kicker, cw / 2, cy - size * 0.88);
     ctx.letterSpacing = "0px";
-    ctx.font = `500 ${Math.round(size)}px Georgia, serif`;
+    ctx.font = `500 ${Math.round(size)}px "Departure Mono", monospace`;
     const fitWidth = Math.min(1, (cw * 0.9) / ctx.measureText(frame.fx.banner.title).width),
       grow = calm.matches ? 1 : 1.12 - 0.12 * enter;
     ctx.save();
@@ -506,7 +506,7 @@ export function createRenderer({
     ctx.fillStyle = ink;
     ctx.fillText(frame.fx.banner.title, 0, 0);
     ctx.restore();
-    ctx.font = `${Math.max(FEEL.valueFontPx * dpr, Math.round(size * 0.3))}px Arial, sans-serif`;
+    ctx.font = `${Math.max(FEEL.valueFontPx * dpr, Math.round(size * 0.3))}px "Departure Mono", monospace`;
     ctx.fillStyle = "#f3e7cf";
     ctx.fillText(frame.fx.banner.detail, cw / 2, cy + size * 0.86, cw * 0.92);
     ctx.restore();

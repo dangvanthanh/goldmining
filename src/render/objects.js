@@ -16,16 +16,53 @@ export function createObjectPainter({ ctx, assets, constants: visual, calm, cloc
   }
   // Moving pig: painted sprite, or the procedural fallback.
   function drawPig(obj, paint) {
-    const { r } = paint;
+    const { r } = paint,
+      phase = (RULES.roundSeconds - frame.state.time) * obj.speed * 0.2,
+      stride = obj.taken ? 0 : Math.sin(phase);
     ctx.scale(obj.direction, 1);
     const pig = assets?.sprites.pig;
     if (pig) {
       const width = r * 2,
         height = (width * pig.height) / pig.width;
-      const bob = obj.taken
-        ? 0
-        : Math.sin((RULES.roundSeconds - frame.state.time) * obj.speed * 0.2) * 1.2;
-      ctx.drawImage(pig, -width / 2, -height * 0.55 + bob, width, height);
+      const bob = obj.taken ? 0 : -Math.abs(Math.cos(phase)) * 0.8,
+        top = -height * 0.55 + bob;
+      if (obj.taken) ctx.drawImage(pig, -width / 2, top, width, height);
+      else {
+        // Keep the torso intact; shear each lower leg from a fixed joint.
+        const joint = 0.72,
+          legHeight = height * (1 - joint),
+          legs = [0, 0.18, 0.46, 0.64, 1];
+        ctx.drawImage(
+          pig,
+          0,
+          0,
+          pig.width,
+          pig.height * joint,
+          -width / 2,
+          top,
+          width,
+          height * joint,
+        );
+        for (let i = 0; i < legs.length - 1; i++) {
+          const step = stride * (i === 0 || i === 3 ? 1 : -1),
+            lift = Math.max(0, Math.cos(phase + (i === 0 || i === 3 ? 0 : Math.PI)));
+          ctx.save();
+          ctx.translate(-width / 2 + legs[i] * width, top + height * joint);
+          ctx.transform(1, 0, (step * r * 0.18) / legHeight, 1 - lift * 0.25, 0, 0);
+          ctx.drawImage(
+            pig,
+            legs[i] * pig.width,
+            pig.height * joint,
+            (legs[i + 1] - legs[i]) * pig.width,
+            pig.height * (1 - joint),
+            0,
+            0,
+            (legs[i + 1] - legs[i]) * width,
+            legHeight,
+          );
+          ctx.restore();
+        }
+      }
       if (obj.taken) {
         ellipse(r * 0.55, -r * 0.25, 3, 3.5, "#fff1d1");
         ellipse(r * 0.6, -r * 0.25, 1.5, 2, "#35251c");
@@ -36,13 +73,11 @@ export function createObjectPainter({ ctx, assets, constants: visual, calm, cloc
       }
       return;
     }
-    const stride = obj.taken
-      ? 0
-      : Math.sin((RULES.roundSeconds - frame.state.time) * obj.speed * 0.2) * 4;
+    const step = stride * 4;
     line(
       [
         [-13, 10],
-        [-14 + stride, 19],
+        [-14 + step, 19],
       ],
       "#d68c7e",
       6,
@@ -50,13 +85,13 @@ export function createObjectPainter({ ctx, assets, constants: visual, calm, cloc
     line(
       [
         [9, 10],
-        [10 - stride, 19],
+        [10 - step, 19],
       ],
       "#d68c7e",
       6,
     );
-    ellipse(-14 + stride, 20, 4, 2.5, "#925b58");
-    ellipse(10 - stride, 20, 4, 2.5, "#925b58");
+    ellipse(-14 + step, 20, 4, 2.5, "#925b58");
+    ellipse(10 - step, 20, 4, 2.5, "#925b58");
     ctx.beginPath();
     ctx.arc(-22, -4, 4, 0, Math.PI * 1.8);
     ctx.strokeStyle = "#e6a08c";
@@ -290,7 +325,7 @@ export function createObjectPainter({ ctx, assets, constants: visual, calm, cloc
     ctx.lineWidth = 1;
     ctx.strokeRect(-r * 0.58, -r * 0.2, r * 1.16, r * 0.5);
     ctx.fillStyle = "#782d25";
-    ctx.font = "900 12px sans-serif";
+    ctx.font = `900 12px "Departure Mono", monospace`;
     ctx.textAlign = "center";
     ctx.fillText("TNT", 0, r * 0.19);
     line(
@@ -334,7 +369,7 @@ export function createObjectPainter({ ctx, assets, constants: visual, calm, cloc
       4,
     );
     ctx.fillStyle = "#f4d5a2";
-    ctx.font = "bold 24px Georgia";
+    ctx.font = `bold 24px "Departure Mono", monospace`;
     ctx.textAlign = "center";
     ctx.fillText("?", 0, 14);
   }

@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Departure Mono";
+  src: url("./assets/fonts/DepartureMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #070c10;
@@ -63,10 +71,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font:
-    14px/1.5 -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+    14px/1.5 "Departure Mono",
+    monospace;
 }
 button,
 input {
@@ -141,10 +147,11 @@ canvas:focus-visible {
 .plaque {
   top: var(--safe-top);
   left: 16px;
-  width: 302px;
+  width: fit-content;
+  max-width: calc(100% - 132px);
   height: 74px;
   display: grid;
-  grid-template-columns: 80px 96px minmax(0, 1fr);
+  grid-template-columns: minmax(80px, 1fr) 96px 76px;
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -176,10 +183,13 @@ canvas:focus-visible {
 }
 .gold-shine {
   font:
-    600 27px/1 Georgia,
-    serif;
+    600 27px/1 "Departure Mono",
+    monospace;
   color: var(--gold);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transform-origin: left center;
 }
 .plaque-goal {
@@ -197,8 +207,8 @@ canvas:focus-visible {
 .plaque-goal b {
   display: block;
   font:
-    500 18px/1.15 Georgia,
-    serif;
+    500 18px/1.15 "Departure Mono",
+    monospace;
   color: var(--text);
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
@@ -360,7 +370,9 @@ kbd,
   left: 0;
   right: 0;
   text-align: center;
-  font: 8px/1 sans-serif;
+  font:
+    8px/1 "Departure Mono",
+    monospace;
   color: var(--muted);
   background: none;
   border: 0;
@@ -420,8 +432,8 @@ kbd,
   inset: 1px 0;
   color: #e6c987;
   font:
-    21px Georgia,
-    serif;
+    21px "Departure Mono",
+    monospace;
   text-align: center;
 }
 .icon-magnet {
@@ -464,8 +476,8 @@ kbd,
 }
 #location {
   font:
-    500 13px/1.2 Georgia,
-    serif;
+    500 13px/1.2 "Departure Mono",
+    monospace;
   color: var(--gold);
   padding-right: 16px;
   border-right: 1px solid #bda97770;
@@ -530,8 +542,8 @@ kbd,
 .settings-panel h2,
 .dialog h2 {
   font:
-    500 30px/1.15 Georgia,
-    serif;
+    500 30px/1.15 "Departure Mono",
+    monospace;
   margin: 0 0 12px;
   color: var(--text);
 }
@@ -793,8 +805,8 @@ canvas.prospector-portrait {
   display: block;
   color: var(--gold);
   font:
-    500 25px/1.2 Georgia,
-    serif;
+    500 25px/1.2 "Departure Mono",
+    monospace;
   margin-top: 3px;
 }
 .shop-summary b {
@@ -854,8 +866,8 @@ canvas.prospector-portrait {
 }
 .shop-item span:not(.item-icon) {
   font:
-    500 17px/1.2 Georgia,
-    serif;
+    500 17px/1.2 "Departure Mono",
+    monospace;
   color: var(--gold);
 }
 .result-stats {
@@ -879,8 +891,8 @@ canvas.prospector-portrait {
 }
 .result-stat dd {
   font:
-    500 clamp(18px, 5vw, 29px)/1.2 Georgia,
-    serif;
+    500 clamp(18px, 5vw, 29px)/1.2 "Departure Mono",
+    monospace;
   font-variant-numeric: tabular-nums;
   color: var(--gold);
   margin: 6px 0 0;
@@ -938,6 +950,7 @@ canvas.prospector-portrait {
   .plaque {
     left: 10px;
     width: calc(100% - 120px);
+    max-width: none;
     height: 78px;
     grid-template-columns: minmax(0, 1fr) 68px;
     gap: 5px 8px;
@@ -974,8 +987,8 @@ canvas.prospector-portrait {
     display: inline;
     margin: 0;
     font:
-      500 12px Georgia,
-      serif;
+      500 12px "Departure Mono",
+      monospace;
   }
   .gold-shine {
     font-size: 24px;
