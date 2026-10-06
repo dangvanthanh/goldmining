@@ -17,24 +17,122 @@ export function createRig({
   // Set at the start of draw/geometry: { state, fx, view } for the frame being drawn.
   let frame;
   const expression = (now) => expressionFor(frame.state, frame.fx, now);
+  const crankAngle = () => (calm.matches ? 0 : frame.fx.crankAngle);
+  const operatorFrames = new WeakMap();
+  // Skin the existing sleeves and gloves, without moving the face, torso base or boots.
+  function posedOperator(image, dx, dy) {
+    if (!dx && !dy) return image;
+    let cached = operatorFrames.get(image);
+    const scale = image.height / visual.authored.operatorHeight;
+    if (!cached) {
+      const canvas = document.createElement("canvas");
+      canvas.height = image.height;
+      cached = { canvas };
+      operatorFrames.set(image, cached);
+    }
+    if (cached.dx === dx && cached.dy === dy) return cached.canvas;
+    cached.canvas.width = image.width + Math.ceil(dx * scale);
+    const g = cached.canvas.getContext("2d"),
+      xs = [0.3, 0.45, 0.65, 1],
+      ys = [0.25, 0.32, 0.38, visual.rig.gloveV, 0.47, 0.53, 0.56];
+    const smooth = (t) => {
+      t = Math.max(0, Math.min(1, t));
+      return t * t * (3 - 2 * t);
+    };
+    const vertex = (u, v) => {
+      const weight =
+        smooth((u - 0.3) / 0.35) *
+        smooth((v - 0.25) / (visual.rig.gloveV - 0.25)) *
+        smooth((0.56 - v) / (0.56 - visual.rig.gloveV));
+      return {
+        x: u * image.width,
+        y: v * image.height,
+        dx: u * image.width + dx * scale * weight,
+        dy: v * image.height + dy * scale * weight,
+      };
+    };
+    const triangle = (p, q, r) => {
+      const sx = q.x - p.x,
+        sy = q.y - p.y,
+        tx = r.x - p.x,
+        ty = r.y - p.y,
+        det = sx * ty - tx * sy;
+      const a = ((q.dx - p.dx) * ty - (r.dx - p.dx) * sy) / det,
+        b = ((q.dy - p.dy) * ty - (r.dy - p.dy) * sy) / det,
+        c = ((r.dx - p.dx) * sx - (q.dx - p.dx) * tx) / det,
+        d = ((r.dy - p.dy) * sx - (q.dy - p.dy) * tx) / det;
+      g.save();
+      g.beginPath();
+      // Subpixel overlap avoids antialiased cracks between adjacent skin triangles.
+      const cx = (p.dx + q.dx + r.dx) / 3,
+        cy = (p.dy + q.dy + r.dy) / 3;
+      for (const [i, v] of [p, q, r].entries()) {
+        const distance = Math.max(1, Math.hypot(v.dx - cx, v.dy - cy)),
+          x = v.dx + ((v.dx - cx) * 0.5) / distance,
+          y = v.dy + ((v.dy - cy) * 0.5) / distance;
+        if (i) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      }
+      g.closePath();
+      g.clip();
+      g.setTransform(a, b, c, d, p.dx - a * p.x - c * p.y, p.dy - b * p.x - d * p.y);
+      g.drawImage(image, 0, 0);
+      g.restore();
+    };
+    g.clearRect(0, 0, cached.canvas.width, cached.canvas.height);
+    g.drawImage(image, 0, 0);
+    g.clearRect(
+      image.width * 0.3,
+      image.height * 0.25,
+      cached.canvas.width - image.width * 0.3,
+      image.height * 0.31,
+    );
+    for (let y = 0; y < ys.length - 1; y++) {
+      for (let x = 0; x < xs.length - 1; x++) {
+        const p = vertex(xs[x], ys[y]),
+          q = vertex(xs[x + 1], ys[y]),
+          r = vertex(xs[x + 1], ys[y + 1]),
+          s = vertex(xs[x], ys[y + 1]);
+        triangle(p, q, r);
+        triangle(p, r, s);
+      }
+    }
+    cached.dx = dx;
+    cached.dy = dy;
+    return cached.canvas;
+  }
   function operatorPose(now) {
-    const mood = expression(now);
-    const rig = visual.rig;
-    const operator = assets?.sprites[mood],
-      shoulder = { x: 488, y: 92 };
-    // The short ratchet stroke leans the operator above boots planted on the catwalk.
-    const stroke = calm.matches ? 0 : Math.sin(frame.fx.crankAngle) * rig.ratchetPx;
-    const operatorHeight = visual.authored.operatorHeight - (operator ? stroke : 0);
-    const operatorX = rig.operatorX + stroke * 0.2,
+    const mood = expression(now),
+      rig = visual.rig,
+      image = assets?.sprites[mood],
+      shoulder = { x: 488, y: 92 },
+      operatorHeight = visual.authored.operatorHeight,
+      operatorX = rig.operatorX,
       operatorY = origin.y - operatorHeight;
-    const handleX = operator
-      ? operatorX + ((rig.gloveU - 0.5) * operatorHeight * operator.width) / operator.height
-      : rig.fallbackGrip.x + stroke * 0.2;
-    const handleY = operator
-      ? operatorY + rig.gloveV * operatorHeight
-      : rig.fallbackGrip.y + stroke;
-
-    return { mood, operator, shoulder, operatorHeight, operatorX, operatorY, handleX, handleY };
+    const gripX = image
+      ? operatorX + ((rig.gloveU - 0.5) * operatorHeight * image.width) / image.height
+      : rig.fallbackGrip.x;
+    const gripY = image ? operatorY + rig.gloveV * operatorHeight : rig.fallbackGrip.y;
+    // Match the spindle's projected circle and rotation direction, not a separate hand orbit.
+    const radiusX = rig.crank.radius * 0.6 * 0.4,
+      dx = (1 - Math.cos(crankAngle())) * radiusX,
+      dy = -Math.sin(crankAngle()) * rig.crank.radius * 0.6,
+      operator = image ? posedOperator(image, dx, dy) : null;
+    return {
+      mood,
+      operator,
+      shoulder,
+      operatorHeight,
+      // Canvas growth follows the hands; the original body stays at the same coordinates.
+      operatorX: operator
+        ? operatorX + ((operator.width - image.width) * operatorHeight) / image.height / 2
+        : operatorX,
+      operatorY,
+      axleX: gripX + radiusX,
+      axleY: gripY,
+      handleX: gripX + dx,
+      handleY: gripY + dy,
+    };
   }
   // Timber and railwork over the catwalk opening.
   function drawCatwalk() {
@@ -227,10 +325,9 @@ export function createRig({
         drive.x,
         drive.y,
         drive.radius,
-        (-frame.fx.crankAngle * crank.radius) / drive.radius,
+        (-crankAngle() * crank.radius) / drive.radius,
         rig.iron,
       );
-      drawGear(crank.x, crank.y, crank.radius, frame.fx.crankAngle, rig.brass);
       // A bearing clamps the crank spindle to the actual timber frame.
       polygon(
         [
@@ -245,19 +342,24 @@ export function createRig({
       );
       for (const y of [crank.y - 6, crank.y + 6]) ellipse(crank.x + 3, y, 1, 1, "#b49b6c");
     }
+    // The visible spindle also turns when the timber and drum use painted art.
+    drawGear(crank.x, crank.y, crank.radius, crankAngle(), rig.brass);
     ellipse(crank.x, crank.y, 3, 4, "#342b20");
     ellipse(crank.x, crank.y, 1.8, 2.7, "#bb9859");
   }
   // Forged crank arm and the handle the operator grips.
   function drawCrankHandle(scene) {
-    const { handleX, handleY } = scene.pose;
+    const { handleX, handleY, axleX, axleY } = scene.pose;
     const rig = visual.rig,
       { crank } = rig;
+    // Both ends share one crank offset: every rod segment keeps its length and orientation.
+    const pinX = crank.x + handleX - axleX,
+      pinY = crank.y + handleY - axleY;
     const crankPath = [
-      [crank.x, crank.y],
-      [handleX + 9, crank.y],
-      [handleX + 9, handleY],
-      [handleX, handleY],
+      [pinX, pinY],
+      [handleX + 7, pinY],
+      [handleX + 7, handleY],
+      [handleX - 17, handleY],
     ];
     const forged = ctx.createLinearGradient(handleX + 7, 0, handleX + 11, 0);
     forged.addColorStop(0, rig.iron[2]);
@@ -265,6 +367,12 @@ export function createRig({
     forged.addColorStop(1, rig.iron[1]);
     ctx.save();
     ctx.lineCap = ctx.lineJoin = "round";
+    const arm = [
+      [crank.x, crank.y],
+      [pinX, pinY],
+    ];
+    line(arm, "#211b15", 5);
+    line(arm, rig.iron[0], 3.2);
     line(crankPath, "#211b15", 5);
     line(crankPath, forged, 3.2);
     line(
@@ -272,23 +380,14 @@ export function createRig({
       "#e4cda477",
       0.7,
     );
-    // Both painted gloves close over the same short handle; the grip is drawn behind them.
-    line(
-      [
-        [handleX - 17, handleY],
-        [handleX + 7, handleY],
-      ],
-      "#30261b",
-      3.5,
-    );
-    line(
-      [
-        [handleX - 17, handleY - 1],
-        [handleX + 7, handleY - 1],
-      ],
-      "#b49a70",
-      0.8,
-    );
+    // Seated pin and hub collars cover the overlapping rod/arm ends; no floating stubs.
+    ellipse(pinX, pinY, 2.2, 3.4, rig.iron[2]);
+    ellipse(pinX - 0.25, pinY - 0.3, 1.6, 2.7, rig.iron[0]);
+    ellipse(pinX, pinY, 0.7, 1.1, rig.iron[2]);
+    ellipse(crank.x, crank.y, 2.4, 4, rig.iron[2]);
+    ellipse(crank.x - 0.3, crank.y - 0.4, 1.7, 2.9, rig.iron[0]);
+    ellipse(crank.x, crank.y, 0.8, 1.3, rig.iron[2]);
+    // The continuous rod's grip section is occluded by the complete authored gloves.
     ellipse(handleX, handleY, 4.5, 4.5, "#5e432a");
     ctx.restore();
   }
@@ -495,13 +594,13 @@ export function createRig({
   // Operator: authored art, or the procedural fallback.
   function drawOperator(scene) {
     const { daylight, flicker } = scene;
-    const { mood, operator, shoulder, operatorHeight, operatorX, operatorY, handleX, handleY } =
+    const { operator, shoulder, operatorHeight, operatorX, operatorY, handleX, handleY } =
       scene.pose;
     const rig = visual.rig;
     if (operator) {
       ellipse(rig.operatorX, origin.y, 28, 4, "#0005");
-      // Keep the complete authored silhouette, including both naturally bent arms and gloves.
-      prospector.draw(ctx, operatorX, operatorY, operatorHeight, mood, frame.view.artName);
+      const width = (operatorHeight * operator.width) / operator.height;
+      ctx.drawImage(operator, operatorX - width / 2, operatorY, width, operatorHeight);
       return;
     }
     // Procedural operator fallback if local images cannot be decoded.
@@ -737,11 +836,11 @@ export function createRig({
       sy + Math.sin(base) * d,
     ];
   }
-  function drawChain(from, to, tension, now) {
+  function drawChain(from, to, tension) {
     const dx = to.x - from.x,
       dy = to.y - from.y,
       dist = Math.max(1, Math.hypot(dx, dy));
-    const bow = Math.min(dist * 0.035, tension) * (1 + Math.sin(now * 0.012) * 0.18);
+    const bow = Math.min(dist * 0.035, tension) * (1 + Math.sin(crankAngle() * 0.5) * 0.18);
     ctx.save();
     ctx.lineCap = "round";
     ctx.beginPath();
@@ -760,6 +859,12 @@ export function createRig({
     ctx.stroke();
     ctx.strokeStyle = "#eee0bb";
     ctx.lineWidth = 0.7;
+    ctx.stroke();
+    // Cable lay travels toward the claw on payout and toward the drum on retrieval.
+    ctx.setLineDash([1.8, 14]);
+    ctx.lineDashOffset = crankAngle() / 0.045;
+    ctx.strokeStyle = "#5c5544";
+    ctx.lineWidth = visual.rig.cableWidth;
     ctx.stroke();
     ctx.restore();
   }

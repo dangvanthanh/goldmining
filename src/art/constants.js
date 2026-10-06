@@ -17,7 +17,6 @@ export const VisualConstants = Object.freeze({
     operatorX: 469,
     gloveU: 0.905,
     gloveV: 0.424,
-    ratchetPx: 1.2,
     fallbackGrip: { x: 507, y: 88 },
     upperArm: 16,
     forearm: 12,

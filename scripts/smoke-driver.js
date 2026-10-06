@@ -270,11 +270,17 @@ window.__smoke = {
           [0.91, 0.419],
           [0.92, 0.43],
         ].map(([u, v]) => {
-          const px = Math.round(fit.ox + (operator.x - width / 2 + u * width) * fit.sx),
-            py = Math.round(fit.oy + (operator.y + v * operator.height) * fit.sy),
+          // Follow the articulated glove rather than its old, stationary texture coordinates.
+          const px = Math.round(fit.ox + (grip.x + (u - constants.rig.gloveU) * width) * fit.sx),
+            py = Math.round(
+              fit.oy + (grip.y + (v - constants.rig.gloveV) * operator.height) * fit.sy,
+            ),
             actual = ctx.getImageData(px, py, 1, 1).data,
             expected = ref.getImageData(px, py, 1, 1).data;
-          return Math.max(...[0, 1, 2].map((i) => Math.abs(actual[i] - expected[i])));
+          return Math.max(
+            255 - expected[3],
+            ...[0, 1, 2].map((i) => Math.abs(actual[i] - expected[i])),
+          );
         }),
       );
     }
